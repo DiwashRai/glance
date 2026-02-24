@@ -7,3 +7,9 @@ A quick and dirty way to have a select few important notifications always visibl
 code reviews, jira. This is so that you can remain deeply focused on the current task, whilst being
 able to *glance* at what else might be waiting on you without having to context switch to email
 clients, browsers etc.
+
+## Design
+- Always on top visibility without being obtrusive
+- Read from some sort of status.json that a different background scrip/task will generate
+  - simple format that has name, symbol, count/value and severity
+  - fast to parse for potential use in a powershell prompt
