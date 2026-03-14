@@ -10,4 +10,4 @@ tick_stack = "left"
 click_through = false
 font = "JetBrainsMono NF"
 font_size = 12
-
+monitors = "primary"

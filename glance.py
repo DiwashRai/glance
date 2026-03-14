@@ -22,6 +22,7 @@ GWL_EXSTYLE = -20
 MS_PER_SECOND = 1000
 WS_EX_LAYERED = 0x00080000
 WS_EX_TRANSPARENT = 0x00000020
+VALID_MONITOR_MODES = {"primary", "all"}
 VALID_POSITIONS = {"TL", "TR", "BL", "BR"}
 VALID_TICK_STACKS = {"left", "right"}
 
@@ -38,11 +39,16 @@ class AppConfig:
     click_through: bool = False
     font: str = "JetBrainsMono NF"
     font_size: int = 12
+    monitors: str | list[int] = "primary"
 
 
 @dataclass
 class AppState:
     mtime: float | None = None
+
+
+@dataclass
+class WindowState:
     locked: bool = True
     drag_x: int = 0
     drag_y: int = 0
@@ -78,20 +84,9 @@ class GlanceApp:
     def __init__(self, config):
         self.config = config
         self.state = AppState()
-        self.font = (config.font, config.font_size)
-        self.root = tk.Tk()
-        self.root.overrideredirect(True)
-        self.root.attributes("-topmost", True)
-        self.root.attributes("-alpha", config.alpha)
-        self.root.configure(bg=BG)
-        self.row = tk.Frame(self.root, bg=BG, padx=8, pady=4)
-        self.row.pack()
-        self.root.bind("<Button-1>", self.start_drag)
-        self.root.bind("<B1-Motion>", self.drag)
-        self.root.bind("<Button-3>", lambda _event: self.root.destroy())
-        self.place_window()
-        if config.click_through:
-            self.set_click_through()
+        primary_window = GlanceWindow(config)
+        self.windows = [primary_window]
+        self.root = primary_window.root
 
     def run(self):
         self.refresh_status()
@@ -102,39 +97,24 @@ class GlanceApp:
             mtime = os.path.getmtime(self.config.path)
             if self.state.mtime != mtime:
                 done, items = self.read_status()
-                self.render(done, items)
+                for window in self.windows:
+                    window.render(done, items)
                 self.state.mtime = mtime
-                if self.state.locked:
-                    self.place_window()
+                for window in self.windows:
+                    if window.state.locked:
+                        window.place_window()
         except OSError:
-            self.render_error(INVALID_PATH_TEXT)
-            if self.state.locked:
-                self.place_window()
+            for window in self.windows:
+                window.render_error(INVALID_PATH_TEXT)
+                if window.state.locked:
+                    window.place_window()
         except Exception as exc:
-            self.render_error(str(exc))
-            if self.state.locked:
-                self.place_window()
+            for window in self.windows:
+                window.render_error(str(exc))
+                if window.state.locked:
+                    window.place_window()
 
         self.root.after(self.config.poll * MS_PER_SECOND, self.refresh_status)
-
-    def render(self, done, items):
-        self.clear()
-        if done > 0 and not items:
-            self.add_label(ALL_CLEAR_TEXT, COLORS[0])
-            return
-
-        ticks = "✓" * done
-        if self.config.tick_stack == "left" and ticks:
-            self.add_label(ticks, COLORS[0], padx=(0, 10))
-
-        self.render_items(items)
-
-        if self.config.tick_stack == "right" and ticks:
-            self.add_label(ticks, COLORS[0], padx=(0, 10))
-
-    def render_error(self, message):
-        self.clear()
-        self.add_label(message, COLORS[3])
 
     def read_status(self):
         with open(self.config.path, "r", encoding="utf-8") as f:
@@ -163,6 +143,45 @@ class GlanceApp:
                 rows.append((symbol, str(count), COLORS[severity]))
 
         return done, rows
+
+
+class GlanceWindow:
+    def __init__(self, config):
+        self.config = config
+        self.state = WindowState()
+        self.font = (config.font, config.font_size)
+        self.root = tk.Tk()
+        self.root.overrideredirect(True)
+        self.root.attributes("-topmost", True)
+        self.root.attributes("-alpha", config.alpha)
+        self.root.configure(bg=BG)
+        self.row = tk.Frame(self.root, bg=BG, padx=8, pady=4)
+        self.row.pack()
+        self.root.bind("<Button-1>", self.start_drag)
+        self.root.bind("<B1-Motion>", self.drag)
+        self.root.bind("<Button-3>", lambda _event: self.root.destroy())
+        self.place_window()
+        if config.click_through:
+            self.set_click_through()
+
+    def render(self, done, items):
+        self.clear()
+        if done > 0 and not items:
+            self.add_label(ALL_CLEAR_TEXT, COLORS[0])
+            return
+
+        ticks = "✓" * done
+        if self.config.tick_stack == "left" and ticks:
+            self.add_label(ticks, COLORS[0], padx=(0, 10))
+
+        self.render_items(items)
+
+        if self.config.tick_stack == "right" and ticks:
+            self.add_label(ticks, COLORS[0], padx=(0, 10))
+
+    def render_error(self, message):
+        self.clear()
+        self.add_label(message, COLORS[3])
 
     def place_window(self):
         self.root.update_idletasks()
@@ -261,6 +280,16 @@ def validate_config(config):
         raise ValueError(
             f"Tick stack must be one of: {sorted(VALID_TICK_STACKS)}"
         )
+    if isinstance(config.monitors, str):
+        config.monitors = config.monitors.lower()
+        if config.monitors not in VALID_MONITOR_MODES:
+            raise ValueError("Monitors must be 'primary', 'all', or a list of ints")
+    elif isinstance(config.monitors, list):
+        config.monitors = [int(monitor) for monitor in config.monitors]
+        if not config.monitors:
+            raise ValueError("Monitors list must not be empty")
+    else:
+        raise ValueError("Monitors must be 'primary', 'all', or a list of ints")
 
     config.poll = max(int(config.poll), 1)
     config.alpha = min(max(float(config.alpha), 0.2), 1.0)
