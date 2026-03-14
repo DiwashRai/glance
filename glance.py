@@ -25,6 +25,7 @@ WS_EX_TRANSPARENT = 0x00000020
 VALID_MONITOR_MODES = {"primary", "all"}
 VALID_POSITIONS = {"TL", "TR", "BL", "BR"}
 VALID_TICK_STACKS = {"left", "right"}
+MONITORINFOF_PRIMARY = 1
 
 
 @dataclass
@@ -52,6 +53,15 @@ class WindowState:
     locked: bool = True
     drag_x: int = 0
     drag_y: int = 0
+
+
+@dataclass
+class MonitorRect:
+    left: int
+    top: int
+    right: int
+    bottom: int
+    is_primary: bool = False
 
 
 def parse_cli_args(argv=None):
@@ -84,7 +94,8 @@ class GlanceApp:
     def __init__(self, config):
         self.config = config
         self.state = AppState()
-        primary_window = GlanceWindow(config)
+        primary_monitor = get_primary_monitor_rect()
+        primary_window = GlanceWindow(config, primary_monitor)
         self.windows = [primary_window]
         self.root = primary_window.root
 
@@ -102,17 +113,17 @@ class GlanceApp:
                 self.state.mtime = mtime
                 for window in self.windows:
                     if window.state.locked:
-                        window.place_window()
+                        window.place()
         except OSError:
             for window in self.windows:
                 window.render_error(INVALID_PATH_TEXT)
                 if window.state.locked:
-                    window.place_window()
+                    window.place()
         except Exception as exc:
             for window in self.windows:
                 window.render_error(str(exc))
                 if window.state.locked:
-                    window.place_window()
+                    window.place()
 
         self.root.after(self.config.poll * MS_PER_SECOND, self.refresh_status)
 
@@ -146,8 +157,9 @@ class GlanceApp:
 
 
 class GlanceWindow:
-    def __init__(self, config):
+    def __init__(self, config, monitor):
         self.config = config
+        self.monitor = monitor
         self.state = WindowState()
         self.font = (config.font, config.font_size)
         self.root = tk.Tk()
@@ -160,7 +172,7 @@ class GlanceWindow:
         self.root.bind("<Button-1>", self.start_drag)
         self.root.bind("<B1-Motion>", self.drag)
         self.root.bind("<Button-3>", lambda _event: self.root.destroy())
-        self.place_window()
+        self.place()
         if config.click_through:
             self.set_click_through()
 
@@ -183,19 +195,17 @@ class GlanceWindow:
         self.clear()
         self.add_label(message, COLORS[3])
 
-    def place_window(self):
+    def place(self):
         self.root.update_idletasks()
         width = self.root.winfo_width()
         height = self.root.winfo_height()
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        x = self.config.x_offset
-        y = self.config.y_offset
+        x = self.monitor.left + self.config.x_offset
+        y = self.monitor.top + self.config.y_offset
 
         if "R" in self.config.pos:
-            x = screen_width - width - self.config.x_offset
+            x = self.monitor.right - width - self.config.x_offset
         if "B" in self.config.pos:
-            y = screen_height - height - self.config.y_offset
+            y = self.monitor.bottom - height - self.config.y_offset
 
         self.root.geometry(f"+{x}+{y}")
 
@@ -296,6 +306,78 @@ def validate_config(config):
     config.x_offset = int(config.x_offset)
     config.y_offset = int(config.y_offset)
     config.font_size = max(int(config.font_size), 1)
+
+
+def get_primary_monitor_rect():
+    for monitor in get_monitor_rects():
+        if monitor.is_primary:
+            return monitor
+    return get_monitor_rects()[0]
+
+
+def get_monitor_rects():
+    if os.name != "nt":
+        return [get_fallback_monitor_rect()]
+
+    user32 = ctypes.windll.user32
+    monitors = []
+
+    class RECT(ctypes.Structure):
+        _fields_ = [
+            ("left", ctypes.c_long),
+            ("top", ctypes.c_long),
+            ("right", ctypes.c_long),
+            ("bottom", ctypes.c_long),
+        ]
+
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", ctypes.c_ulong),
+            ("rcMonitor", RECT),
+            ("rcWork", RECT),
+            ("dwFlags", ctypes.c_ulong),
+        ]
+
+    callback_type = ctypes.WINFUNCTYPE(
+        ctypes.c_int,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.POINTER(RECT),
+        ctypes.c_double,
+    )
+
+    def callback(hmonitor, _hdc, _rect, _data):
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        user32.GetMonitorInfoW(hmonitor, ctypes.byref(info))
+        rect = info.rcMonitor
+        monitors.append(
+            MonitorRect(
+                left=rect.left,
+                top=rect.top,
+                right=rect.right,
+                bottom=rect.bottom,
+                is_primary=bool(info.dwFlags & MONITORINFOF_PRIMARY),
+            )
+        )
+        return 1
+
+    user32.EnumDisplayMonitors(0, 0, callback_type(callback), 0)
+    return monitors or [get_fallback_monitor_rect()]
+
+
+def get_fallback_monitor_rect():
+    root = tk.Tk()
+    root.withdraw()
+    monitor = MonitorRect(
+        left=0,
+        top=0,
+        right=root.winfo_screenwidth(),
+        bottom=root.winfo_screenheight(),
+        is_primary=True,
+    )
+    root.destroy()
+    return monitor
 
 
 if __name__ == "__main__":
