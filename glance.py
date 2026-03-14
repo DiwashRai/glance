@@ -5,7 +5,7 @@ import json
 import os
 import tkinter as tk
 import tomllib
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 
 
 DEFAULT_CONFIG_PATH = "config.toml"
@@ -42,19 +42,6 @@ class AppConfig:
     font_size: int = 12
     monitors: str | list[int] = "primary"
 
-
-@dataclass
-class AppState:
-    mtime: float | None = None
-
-
-@dataclass
-class WindowState:
-    locked: bool = True
-    drag_x: int = 0
-    drag_y: int = 0
-
-
 @dataclass
 class MonitorRect:
     number: int
@@ -74,13 +61,21 @@ def parse_cli_args(argv=None):
 
 
 def main():
-    config = load_app_config(parse_cli_args())
-    GlanceApp(config).run()
+    try:
+        config = load_app_config(parse_cli_args())
+        GlanceApp(config).run()
+    except Exception as exc:
+        print(exc)
+        raise SystemExit(1)
 
 
 def load_app_config(cli_args):
     config = AppConfig()
-    apply_config_values(config, load_toml_config(cli_args.config))
+    valid_fields = set(AppConfig.__dataclass_fields__)
+    for key, value in load_toml_config(cli_args.config).items():
+        if key not in valid_fields:
+            raise ValueError(f"Unknown config option: {key}")
+        setattr(config, key, value)
 
     if cli_args.path is not None:
         config.path = cli_args.path
@@ -94,7 +89,7 @@ def load_app_config(cli_args):
 class GlanceApp:
     def __init__(self, config):
         self.config = config
-        self.state = AppState()
+        self.mtime = None
         self.root = tk.Tk()
         self.root.withdraw()
         monitors = select_monitor_rects(get_monitor_rects(), config.monitors)
@@ -109,26 +104,22 @@ class GlanceApp:
     def refresh_status(self):
         try:
             mtime = os.path.getmtime(self.config.path)
-            if self.state.mtime != mtime:
+            if self.mtime != mtime:
                 done, items = self.read_status()
-                for window in self.windows:
-                    window.render(done, items)
-                self.state.mtime = mtime
-                for window in self.windows:
-                    if window.state.locked:
-                        window.place()
+                self.update_windows(GlanceWindow.render, done, items)
+                self.mtime = mtime
         except OSError:
-            for window in self.windows:
-                window.render_error(INVALID_PATH_TEXT)
-                if window.state.locked:
-                    window.place()
+            self.update_windows(GlanceWindow.render_error, INVALID_PATH_TEXT)
         except Exception as exc:
-            for window in self.windows:
-                window.render_error(str(exc))
-                if window.state.locked:
-                    window.place()
+            self.update_windows(GlanceWindow.render_error, str(exc))
 
         self.root.after(self.config.poll * MS_PER_SECOND, self.refresh_status)
+
+    def update_windows(self, render_method, *args):
+        for window in self.windows:
+            render_method(window, *args)
+            if window.locked:
+                window.place()
 
     def read_status(self):
         with open(self.config.path, "r", encoding="utf-8") as f:
@@ -163,8 +154,10 @@ class GlanceWindow:
     def __init__(self, app_root, config, monitor):
         self.config = config
         self.monitor = monitor
-        self.state = WindowState()
         self.font = (config.font, config.font_size)
+        self.locked = True
+        self.drag_x = 0
+        self.drag_y = 0
         self.root = tk.Toplevel(app_root)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
@@ -227,15 +220,15 @@ class GlanceWindow:
             pass
 
     def start_drag(self, event):
-        self.state.drag_x = event.x_root
-        self.state.drag_y = event.y_root
-        self.state.locked = False
+        self.drag_x = event.x_root
+        self.drag_y = event.y_root
+        self.locked = False
 
     def drag(self, event):
-        dx = event.x_root - self.state.drag_x
-        dy = event.y_root - self.state.drag_y
-        self.state.drag_x = event.x_root
-        self.state.drag_y = event.y_root
+        dx = event.x_root - self.drag_x
+        dy = event.y_root - self.drag_y
+        self.drag_x = event.x_root
+        self.drag_y = event.y_root
         self.root.geometry(f"+{self.root.winfo_x() + dx}+{self.root.winfo_y() + dy}")
 
     def clear(self):
@@ -249,7 +242,7 @@ class GlanceWindow:
             self.add_label(f"{symbol}:", LABEL_FG, parent=cell)
             self.add_label(value, color, parent=cell, padx=(4, 0))
 
-    def add_label(self, text, color, parent=None, padx=(0,0)):
+    def add_label(self, text, color, parent=None, padx=(0, 0)):
         tk.Label(
             parent or self.row,
             text=text,
@@ -257,17 +250,6 @@ class GlanceWindow:
             bg=BG,
             font=self.font,
         ).pack(side="left", padx=padx)
-
-
-# ---- Helpers -----------------------------------------------------------------------------------
-
-
-def apply_config_values(config, values):
-    valid_fields = {field.name for field in fields(AppConfig)}
-    for key, value in values.items():
-        if key not in valid_fields:
-            raise ValueError(f"Unknown config option: {key}")
-        setattr(config, key, value)
 
 
 def load_toml_config(config_path):
@@ -356,7 +338,7 @@ def get_monitor_rects():
         rect = info.rcMonitor
         monitors.append(
             MonitorRect(
-                number=len(monitors) + 1,
+                number=0,
                 left=rect.left,
                 top=rect.top,
                 right=rect.right,
@@ -367,7 +349,21 @@ def get_monitor_rects():
         return 1
 
     user32.EnumDisplayMonitors(0, 0, callback_type(callback), 0)
-    return monitors or [get_fallback_monitor_rect()]
+    if not monitors:
+        return [get_fallback_monitor_rect()]
+
+    monitors.sort(key=lambda monitor: (monitor.left, monitor.top))
+    return [
+        MonitorRect(
+            number=index,
+            left=monitor.left,
+            top=monitor.top,
+            right=monitor.right,
+            bottom=monitor.bottom,
+            is_primary=monitor.is_primary,
+        )
+        for index, monitor in enumerate(monitors, start=1)
+    ]
 
 
 def get_fallback_monitor_rect():
@@ -391,8 +387,10 @@ def select_monitor_rects(monitors, selection):
     if selection == "primary":
         return [monitor for monitor in monitors if monitor.is_primary] or [monitors[0]]
     selected = [monitor for monitor in monitors if monitor.number in selection]
-    if not selected:
-        raise ValueError(f"No monitors matched {selection}")
+    selected_numbers = {monitor.number for monitor in selected}
+    missing_numbers = [number for number in selection if number not in selected_numbers]
+    if missing_numbers:
+        raise ValueError(f"No monitors matched {missing_numbers}")
     return selected
 
 
