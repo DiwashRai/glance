@@ -11,3 +11,34 @@ click_through = false
 font = "JetBrainsMono NF"
 font_size = 12
 monitors = "all"
+
+[updater]
+output_path = "data/status.json"
+
+[providers.work_outlook]
+kind = "outlook"
+
+[providers.work_jira]
+kind = "jira"
+
+[providers.github]
+kind = "github-gh"
+
+[[entries]]
+provider = "work_outlook"
+label = "email/inbox"
+icon = "󰇮"
+thresholds = { low = 5, medium = 15, high = 30 }
+requests = [
+  { folder = "Inbox" }
+]
+
+[[entries]]
+provider = "github"
+label = "reviews"
+icon = ""
+thresholds = { low = 1, medium = 3, high = 5 }
+requests = [
+  { search = "is:open is:pr assignee:@me" },
+  { search = "is:open is:pr review-requested:@me" }
+]

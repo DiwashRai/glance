@@ -16,3 +16,6 @@ glance-collector = "update_status:main"
 
 [tool.setuptools]
 py-modules = ["glance", "update_status"]
+
+[tool.setuptools.packages.find]
+include = ["providers*"]
