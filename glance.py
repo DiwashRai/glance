@@ -57,6 +57,7 @@ class WindowState:
 
 @dataclass
 class MonitorRect:
+    number: int
     left: int
     top: int
     right: int
@@ -94,10 +95,12 @@ class GlanceApp:
     def __init__(self, config):
         self.config = config
         self.state = AppState()
-        primary_monitor = get_primary_monitor_rect()
-        primary_window = GlanceWindow(config, primary_monitor)
-        self.windows = [primary_window]
-        self.root = primary_window.root
+        self.root = tk.Tk()
+        self.root.withdraw()
+        monitors = select_monitor_rects(get_monitor_rects(), config.monitors)
+        self.windows = [
+            GlanceWindow(self.root, config, monitor) for monitor in monitors
+        ]
 
     def run(self):
         self.refresh_status()
@@ -157,12 +160,12 @@ class GlanceApp:
 
 
 class GlanceWindow:
-    def __init__(self, config, monitor):
+    def __init__(self, app_root, config, monitor):
         self.config = config
         self.monitor = monitor
         self.state = WindowState()
         self.font = (config.font, config.font_size)
-        self.root = tk.Tk()
+        self.root = tk.Toplevel(app_root)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", config.alpha)
@@ -171,7 +174,7 @@ class GlanceWindow:
         self.row.pack()
         self.root.bind("<Button-1>", self.start_drag)
         self.root.bind("<B1-Motion>", self.drag)
-        self.root.bind("<Button-3>", lambda _event: self.root.destroy())
+        self.root.bind("<Button-3>", lambda _event: app_root.destroy())
         self.place()
         if config.click_through:
             self.set_click_through()
@@ -291,9 +294,9 @@ def validate_config(config):
             f"Tick stack must be one of: {sorted(VALID_TICK_STACKS)}"
         )
     if isinstance(config.monitors, str):
-        config.monitors = config.monitors.lower()
+        config.monitors = config.monitors.strip().lower()
         if config.monitors not in VALID_MONITOR_MODES:
-            raise ValueError("Monitors must be 'primary', 'all', or a list of ints")
+            config.monitors = parse_monitor_list(config.monitors)
     elif isinstance(config.monitors, list):
         config.monitors = [int(monitor) for monitor in config.monitors]
         if not config.monitors:
@@ -308,11 +311,11 @@ def validate_config(config):
     config.font_size = max(int(config.font_size), 1)
 
 
-def get_primary_monitor_rect():
-    for monitor in get_monitor_rects():
-        if monitor.is_primary:
-            return monitor
-    return get_monitor_rects()[0]
+def parse_monitor_list(value):
+    monitors = [int(part.strip()) for part in value.split(",") if part.strip()]
+    if not monitors:
+        raise ValueError("Monitors list must not be empty")
+    return monitors
 
 
 def get_monitor_rects():
@@ -353,6 +356,7 @@ def get_monitor_rects():
         rect = info.rcMonitor
         monitors.append(
             MonitorRect(
+                number=len(monitors) + 1,
                 left=rect.left,
                 top=rect.top,
                 right=rect.right,
@@ -370,6 +374,7 @@ def get_fallback_monitor_rect():
     root = tk.Tk()
     root.withdraw()
     monitor = MonitorRect(
+        number=1,
         left=0,
         top=0,
         right=root.winfo_screenwidth(),
@@ -378,6 +383,17 @@ def get_fallback_monitor_rect():
     )
     root.destroy()
     return monitor
+
+
+def select_monitor_rects(monitors, selection):
+    if selection == "all":
+        return monitors
+    if selection == "primary":
+        return [monitor for monitor in monitors if monitor.is_primary] or [monitors[0]]
+    selected = [monitor for monitor in monitors if monitor.number in selection]
+    if not selected:
+        raise ValueError(f"No monitors matched {selection}")
+    return selected
 
 
 if __name__ == "__main__":
