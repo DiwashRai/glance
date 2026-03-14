@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glance"
+version = "0.1.0"
+description = "A lightweight desktop renderer and status collector for glanceable notifications."
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["notifications", "statusbar", "desktop", "tkinter"]
+
+[project.scripts]
+glance-renderer = "glance:main"
+glance-collector = "update_status:main"
+
+[tool.setuptools]
+py-modules = ["glance", "update_status"]

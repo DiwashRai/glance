@@ -1,0 +1,13 @@
+
+[glance]
+path = "data/status.json"
+poll = 5
+pos = "TR"
+x_offset = 20
+y_offset = 20
+alpha = 0.7
+tick_stack = "left"
+click_through = false
+font = "JetBrainsMono NF"
+font_size = 12
+
