@@ -9,6 +9,7 @@ from pathlib import Path
 from providers.github_gh import get_gh_pr_count
 from providers.jira import get_issue_count
 from providers.outlook_emails import get_unread_email_count
+from providers.todoist import DEFAULT_FILTER, get_task_count
 
 
 DEFAULT_CONFIG_PATH = "config.toml"
@@ -16,6 +17,7 @@ PROVIDER_FUNCTIONS = {
     "github-gh": get_gh_pr_count,
     "jira": get_issue_count,
     "outlook": get_unread_email_count,
+    "todoist": get_task_count,
 }
 
 
@@ -193,6 +195,29 @@ def run_github_gh_request(fetcher, request):
     return fetcher([args])
 
 
+def run_todoist_request(fetcher, provider_name, config, request):
+    providers = get_table(config, "providers")
+    provider = providers.get(provider_name)
+    if not isinstance(provider, dict):
+        raise ValueError(f"[providers.{provider_name}] must be a TOML table")
+
+    api_token = provider.get("api_token")
+    if not isinstance(api_token, str) or not api_token:
+        raise ValueError(f"[providers.{provider_name}].api_token must be a non-empty string")
+
+    filter_value = request.get("filter")
+    if filter_value is None:
+        filter_value = request.get("query", DEFAULT_FILTER)
+    if not isinstance(filter_value, str) or not filter_value:
+        raise ValueError("Todoist requests require 'filter' to be a non-empty string")
+
+    lang = request.get("lang")
+    if lang is not None and (not isinstance(lang, str) or not lang):
+        raise ValueError("Todoist request 'lang' must be a non-empty string when provided")
+
+    return fetcher(api_token, filter_value=filter_value, lang=lang)
+
+
 def run_request(kind, provider_name, config, request):
     fetcher = PROVIDER_FUNCTIONS.get(kind)
     if fetcher is None:
@@ -206,6 +231,9 @@ def run_request(kind, provider_name, config, request):
 
     if kind == "github-gh":
         return run_github_gh_request(fetcher, request)
+
+    if kind == "todoist":
+        return run_todoist_request(fetcher, provider_name, config, request)
 
     raise ValueError(f"Unsupported provider kind: {kind}")
 

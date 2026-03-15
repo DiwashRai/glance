@@ -27,6 +27,19 @@ api_token = ""
 [providers.github]
 kind = "github-gh"
 
+[providers.todoist]
+kind = "todoist"
+api_token = ""
+
+[[entries]]
+provider = "todoist"
+label = "todoist/today"
+icon = ""
+thresholds = { low = 5, medium = 15, high = 30 }
+requests = [
+  { filter = "today | overdue" }
+]
+
 [[entries]]
 provider = "work_outlook"
 label = "email/inbox"
