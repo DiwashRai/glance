@@ -1,5 +1,4 @@
 import argparse
-import json
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -11,6 +10,7 @@ from providers.github_gh import get_gh_pr_count
 from providers.jira import get_issue_count
 from providers.outlook_emails import get_unread_email_count
 from providers.todoist import DEFAULT_FILTER, get_task_count
+from status_format import format_status_payload
 
 
 DEFAULT_CONFIG_PATH = "config.toml"
@@ -287,7 +287,7 @@ def build_status_payload(config):
 def write_status_file(payload, output_path):
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    path.write_text(format_status_payload(payload), encoding="utf-8")
 
 
 def main(argv=None):
@@ -296,7 +296,7 @@ def main(argv=None):
     payload = build_status_payload(config)
 
     if args.dry_run:
-        print(json.dumps(payload, indent=2))
+        print(format_status_payload(payload), end="")
         return 0
 
     output_path = resolve_output_path(config, args.output)
