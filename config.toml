@@ -30,7 +30,7 @@ label = "email/inbox"
 icon = "󰇮"
 thresholds = { low = 5, medium = 15, high = 30 }
 requests = [
-  { folder = "Inbox" }
+  { folders = "Inbox" }
 ]
 
 [[entries]]

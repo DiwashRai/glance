@@ -133,18 +133,27 @@ def run_request(kind, request):
 
     if kind == "outlook":
         folders = request.get("folders")
-        if folders is None:
-            folder = request.get("folder")
-            if not isinstance(folder, str) or not folder:
-                raise ValueError(
-                    "Outlook requests require a non-empty 'folder' or 'folders'"
-                )
-            folders = [folder]
-        if not isinstance(folders, list) or not folders:
-            raise ValueError("Outlook requests require a non-empty 'folders' list")
-        if not all(isinstance(folder, str) and folder for folder in folders):
-            raise ValueError("Outlook 'folders' entries must all be non-empty strings")
-        return fetcher(folders)
+        if not isinstance(folders, str) or not folders:
+            raise ValueError(
+                "Outlook requests require a non-empty comma-separated 'folders' string"
+            )
+
+        folder_list = []
+        for folder in folders.split(","):
+            folder = folder.strip()
+            if not folder:
+                continue
+            if folder.isdigit():
+                folder_list.append(int(folder))
+            else:
+                folder_list.append(folder)
+
+        if not folder_list:
+            raise ValueError(
+                "Outlook requests require at least one folder in 'folders'"
+            )
+
+        return fetcher(folder_list)
 
     if kind == "jira":
         jql = request.get("jql")
