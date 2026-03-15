@@ -1,50 +1,3 @@
-[CmdletBinding()]
-param()
-
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
-function Get-FolderRecord {
-    param(
-        [Parameter(Mandatory = $true)]
-        $Folder,
-
-        [int]$DefaultFolderId = 0
-    )
-
-    [pscustomobject]@{
-        DefaultFolderId = $DefaultFolderId
-        Store           = $Folder.Store.DisplayName
-        Path            = $Folder.FolderPath
-        Name            = $Folder.Name
-        UnreadCount     = [int]$Folder.UnReadItemCount
-        ItemCount       = [int]$Folder.Items.Count
-    }
-}
-
-function Add-FolderTree {
-    param(
-        [Parameter(Mandatory = $true)]
-        $Folder,
-
-        [Parameter(Mandatory = $true)]
-        [System.Collections.Generic.HashSet[string]]$SeenEntryIds,
-
-        [Parameter(Mandatory = $true)]
-        [System.Collections.Generic.List[object]]$Results
-    )
-
-    $entryId = [string]$Folder.EntryID
-    if (-not [string]::IsNullOrWhiteSpace($entryId) -and -not $SeenEntryIds.Add($entryId)) {
-        return
-    }
-
-    $Results.Add((Get-FolderRecord -Folder $Folder))
-
-    foreach ($childFolder in @($Folder.Folders)) {
-        Add-FolderTree -Folder $childFolder -SeenEntryIds $SeenEntryIds -Results $Results
-    }
-}
 
 $defaultFolders = @(
     @{ Id = 6;  Name = "Inbox" },
@@ -60,30 +13,43 @@ $defaultFolders = @(
     @{ Id = 12; Name = "Notes" }
 )
 
-$outlook = New-Object -ComObject Outlook.Application
-$namespace = $outlook.GetNamespace("MAPI")
-$seenEntryIds = [System.Collections.Generic.HashSet[string]]::new()
-$defaultResults = [System.Collections.Generic.List[object]]::new()
-$otherResults = [System.Collections.Generic.List[object]]::new()
+function Get-FolderInfo {
+    param($folder, $indent = "")
 
-foreach ($defaultFolder in $defaultFolders) {
+    $unread = 0
     try {
-        $folder = $namespace.GetDefaultFolder($defaultFolder.Id)
-        if ($null -ne $folder) {
-            $entryId = [string]$folder.EntryID
-            if ([string]::IsNullOrWhiteSpace($entryId) -or $seenEntryIds.Add($entryId)) {
-                $defaultResults.Add(
-                    (Get-FolderRecord -Folder $folder -DefaultFolderId $defaultFolder.Id)
-                )
-            }
+        $unread = $folder.UnReadItemCount
+    } catch {
+        $unread = 0
+    }
+
+    Write-Output "$indent$($folder.Name) | Unread : $unread"
+
+    try {
+        foreach ($subfolder in $folder.Folders) {
+            Get-FolderInfo -folder $subfolder -indent "  $indent"
         }
     } catch {
-        continue
     }
 }
 
-foreach ($rootFolder in @($namespace.Folders)) {
-    Add-FolderTree -Folder $rootFolder -SeenEntryIds $seenEntryIds -Results $otherResults
+
+$outlook = New-Object -ComObject Outlook.Application
+$namespace = $outlook.GetNamespace("MAPI")
+
+foreach ($item in $defaultFolders) {
+    try {
+        $folder = $namespace.GetDefaultFolder($item.ID)
+        $unread = $folder.UnReadItemCount
+        Write-Output "  ID $($item.ID) : $($item.Name) | Unread: $unread"
+    } catch {
+    }
+}
+
+$defaultStore = $namespace.Folders.Item(1)
+
+foreach ($folder in $defaultStore.Folders) {
+    Get-FolderInfo -folder $folder
 }
 
 $defaultResults
