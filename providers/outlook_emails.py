@@ -47,12 +47,23 @@ def get_unread_email_count(folders):
     return total
 
 
+# ---- Helpers ------------------------------------------------------------------------------------
+
+
+def parse_folder_arg(value):
+    if value.isdigit():
+        return int(value)
+    return value
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Return unread counts for Outlook folders via COM."
     )
     parser.add_argument("folders", nargs="+", help="Folder names or Outlook folder paths.")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    args.folders = [parse_folder_arg(folder) for folder in args.folders]
+    return args
 
 
 def main(argv=None):

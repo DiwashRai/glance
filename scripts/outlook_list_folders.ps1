@@ -37,6 +37,8 @@ function Get-FolderInfo {
 $outlook = New-Object -ComObject Outlook.Application
 $namespace = $outlook.GetNamespace("MAPI")
 
+Write-Output "---- Default Folders (use numeric ID) -------------------------------"
+
 foreach ($item in $defaultFolders) {
     try {
         $folder = $namespace.GetDefaultFolder($item.ID)
@@ -47,6 +49,8 @@ foreach ($item in $defaultFolders) {
 }
 
 $defaultStore = $namespace.Folders.Item(1)
+
+Write-Output "---- All folders (use quoted folder name) ---------------------------"
 
 foreach ($folder in $defaultStore.Folders) {
     Get-FolderInfo -folder $folder
