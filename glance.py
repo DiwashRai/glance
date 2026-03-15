@@ -8,7 +8,7 @@ import tomllib
 from dataclasses import dataclass
 
 
-DEFAULT_CONFIG_PATH = "config.toml"
+DEFAULT_CONFIG_PATH = "config.local.toml"
 ALL_CLEAR_TEXT = "✓ clear"
 INVALID_PATH_TEXT = "Invalid Path"
 STATUS_FIELD_MISSING_TEXT = "Status Field Missing"

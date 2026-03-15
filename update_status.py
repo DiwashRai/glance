@@ -13,7 +13,7 @@ from providers.todoist import DEFAULT_FILTER, get_task_count
 from status_format import format_status_payload
 
 
-DEFAULT_CONFIG_PATH = "config.toml"
+DEFAULT_CONFIG_PATH = "config.local.toml"
 PROVIDER_FUNCTIONS = {
     "dummy": get_dummy_count,
     "github-gh": get_gh_pr_count,
