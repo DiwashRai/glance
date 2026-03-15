@@ -6,14 +6,14 @@ except ModuleNotFoundError:
     import tomli as tomllib # type: ignore[import-not-found]
 from pathlib import Path
 
-from providers.github_gh import get_search_result_count
+from providers.github_gh import get_gh_pr_count
 from providers.jira import get_issue_count
 from providers.outlook_emails import get_unread_email_count
 
 
 DEFAULT_CONFIG_PATH = "config.toml"
 PROVIDER_FUNCTIONS = {
-    "github-gh": get_search_result_count,
+    "github-gh": get_gh_pr_count,
     "jira": get_issue_count,
     "outlook": get_unread_email_count,
 }
@@ -163,10 +163,10 @@ def run_jira_request(fetcher, request):
 
 
 def run_github_gh_request(fetcher, request):
-    search = request.get("search")
-    if not isinstance(search, str) or not search:
-        raise ValueError("GitHub requests require a non-empty 'search'")
-    return fetcher(search)
+    args = request.get("args")
+    if not isinstance(args, list) or not args:
+        raise ValueError("GitHub requests require a non-empty 'args' list")
+    return fetcher([args])
 
 
 def run_request(kind, request):
