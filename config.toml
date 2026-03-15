@@ -30,7 +30,7 @@ label = "email/inbox"
 icon = "󰇮"
 thresholds = { low = 5, medium = 15, high = 30 }
 requests = [
-  { folders = "Inbox" }
+  { folders = ["6"] }
 ]
 
 [[entries]]
@@ -39,6 +39,6 @@ label = "reviews"
 icon = ""
 thresholds = { low = 1, medium = 3, high = 5 }
 requests = [
-  { search = "is:open is:pr assignee:@me" },
-  { search = "is:open is:pr review-requested:@me" }
+  { args = ["--state=open", "--assignee=@me"] },
+  { args = ["--state=open", "--review-requested=@me"] }
 ]

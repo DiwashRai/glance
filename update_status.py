@@ -126,46 +126,59 @@ def get_severity(count, thresholds):
     return 3
 
 
+def run_outlook_request(fetcher, request):
+    folders = request.get("folders")
+    if not isinstance(folders, list) or not folders:
+        raise ValueError(
+            "Outlook requests require a non-empty 'folders' list"
+        )
+
+    folder_list = []
+    for folder in folders:
+        if not isinstance(folder, str) or not folder:
+            raise ValueError(
+                "Outlook folder list items must be non-empty strings"
+            )
+        if folder.isdigit():
+            folder_list.append(int(folder))
+        else:
+            folder_list.append(folder)
+
+    if not folder_list:
+        raise ValueError(
+            "Outlook requests require at least one folder in 'folders'"
+        )
+
+    return fetcher(folder_list)
+
+
+def run_jira_request(fetcher, request):
+    jql = request.get("jql")
+    if not isinstance(jql, str) or not jql:
+        raise ValueError("Jira requests require a non-empty 'jql'")
+    return fetcher(jql)
+
+
+def run_github_gh_request(fetcher, request):
+    search = request.get("search")
+    if not isinstance(search, str) or not search:
+        raise ValueError("GitHub requests require a non-empty 'search'")
+    return fetcher(search)
+
+
 def run_request(kind, request):
     fetcher = PROVIDER_FUNCTIONS.get(kind)
     if fetcher is None:
         raise ValueError(f"Unsupported provider kind: {kind}")
 
     if kind == "outlook":
-        folders = request.get("folders")
-        if not isinstance(folders, str) or not folders:
-            raise ValueError(
-                "Outlook requests require a non-empty comma-separated 'folders' string"
-            )
-
-        folder_list = []
-        for folder in folders.split(","):
-            folder = folder.strip()
-            if not folder:
-                continue
-            if folder.isdigit():
-                folder_list.append(int(folder))
-            else:
-                folder_list.append(folder)
-
-        if not folder_list:
-            raise ValueError(
-                "Outlook requests require at least one folder in 'folders'"
-            )
-
-        return fetcher(folder_list)
+        return run_outlook_request(fetcher, request)
 
     if kind == "jira":
-        jql = request.get("jql")
-        if not isinstance(jql, str) or not jql:
-            raise ValueError("Jira requests require a non-empty 'jql'")
-        return fetcher(jql)
+        return run_jira_request(fetcher, request)
 
     if kind == "github-gh":
-        search = request.get("search")
-        if not isinstance(search, str) or not search:
-            raise ValueError("GitHub requests require a non-empty 'search'")
-        return fetcher(search)
+        return run_github_gh_request(fetcher, request)
 
     raise ValueError(f"Unsupported provider kind: {kind}")
 
