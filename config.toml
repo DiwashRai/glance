@@ -1,6 +1,6 @@
 
 [glance]
-path = "data/status.json"
+path = "data/status.local.json"
 poll = 5
 pos = "TR"
 x_offset = 20
@@ -13,7 +13,7 @@ font_size = 12
 monitors = "all"
 
 [updater]
-output_path = "data/status.json"
+output_path = "data/status.local.json"
 
 [providers.work_outlook]
 kind = "outlook"

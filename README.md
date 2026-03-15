@@ -11,12 +11,33 @@ clients, browsers etc.
 Instructions are for windows at the moment.
 
 ## Usage
-To be used to read a status.json file that a different background task will create. This is to
-keep things efficient and snappy. Means that I can use the status.json file for my terminal
-prompt too.
+The repo is set up so you can keep tracked defaults in `config.toml` and personal settings in
+`config.local.toml`. The local file is ignored, so your tokens, folder selections, and status
+file path do not block `git pull`.
 
+The quickest way to get started is:
+
+```bat
+scripts\run_glance.cmd
 ```
-pythonw.exe "C:\path\to\glance.py" -p "C:\path\to\status.json"
+
+On first run that script will:
+- copy `config.toml` to `config.local.toml` if needed
+- copy `data\status.json` to `data\status.local.json` if needed
+- start the renderer using `config.local.toml`
+
+To refresh counts with the same local config:
+
+```bat
+scripts\update_status.cmd
+```
+
+If you prefer to run the Python entry points directly, they now look for `config.local.toml`
+first and fall back to `config.toml`.
+
+```bat
+pythonw.exe "C:\path\to\glance.py" --config "C:\path\to\config.local.toml"
+python.exe "C:\path\to\update_status.py" --config "C:\path\to\config.local.toml"
 ```
 Use python.exe and not pythonw.exe if you are making sure that it's starting up and running fine
 otherwise you have to kill the process from task manager or using taskkill.
@@ -24,7 +45,7 @@ otherwise you have to kill the process from task manager or using taskkill.
 ### With Task Scheduler:
 - Create a task that triggers on logon. Add a delay if you want.
 - General: Set 'Run only when user is logged on'
-- Action should be: Start a program C:\Path\to\glance\run_glance.cmd
+- Action should be: Start a program `C:\Path\to\glance\scripts\run_glance.cmd`
 - Settings: If the task is already running the the following rule applies:
   - 'Do not start a new instance'
 

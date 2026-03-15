@@ -1,2 +1,4 @@
 
 __pycache__/
+config.local.toml
+data/status.local.json
