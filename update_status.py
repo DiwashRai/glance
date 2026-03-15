@@ -155,11 +155,35 @@ def run_outlook_request(fetcher, request):
     return fetcher(folder_list)
 
 
-def run_jira_request(fetcher, request):
+def run_jira_request(fetcher, provider_name, config, request):
+    providers = get_table(config, "providers")
+    provider = providers.get(provider_name)
+    if not isinstance(provider, dict):
+        raise ValueError(f"[providers.{provider_name}] must be a TOML table")
+
+    base_url = provider.get("base_url")
+    if not isinstance(base_url, str) or not base_url:
+        raise ValueError(f"[providers.{provider_name}].base_url must be a non-empty string")
+
+    api_version = provider.get("api_version")
+    if not isinstance(api_version, (int, str)) or not str(api_version):
+        raise ValueError(f"[providers.{provider_name}].api_version must be set")
+
+    api_token = provider.get("api_token")
+    if not isinstance(api_token, str) or not api_token:
+        raise ValueError(f"[providers.{provider_name}].api_token must be a non-empty string")
+
     jql = request.get("jql")
-    if not isinstance(jql, str) or not jql:
-        raise ValueError("Jira requests require a non-empty 'jql'")
-    return fetcher(jql)
+    if not isinstance(jql, list) or not jql:
+        raise ValueError("Jira requests require a non-empty 'jql' list")
+
+    jqls = []
+    for item in jql:
+        if not isinstance(item, str) or not item:
+            raise ValueError("Jira jql items must be non-empty strings")
+        jqls.append(item)
+
+    return fetcher(base_url, api_version, api_token, jqls)
 
 
 def run_github_gh_request(fetcher, request):
@@ -169,7 +193,7 @@ def run_github_gh_request(fetcher, request):
     return fetcher([args])
 
 
-def run_request(kind, request):
+def run_request(kind, provider_name, config, request):
     fetcher = PROVIDER_FUNCTIONS.get(kind)
     if fetcher is None:
         raise ValueError(f"Unsupported provider kind: {kind}")
@@ -178,7 +202,7 @@ def run_request(kind, request):
         return run_outlook_request(fetcher, request)
 
     if kind == "jira":
-        return run_jira_request(fetcher, request)
+        return run_jira_request(fetcher, provider_name, config, request)
 
     if kind == "github-gh":
         return run_github_gh_request(fetcher, request)
@@ -202,7 +226,10 @@ def build_status_rows(config):
 
         kind = get_provider_kind(config, provider_name)
         thresholds = get_thresholds(entry)
-        total = sum(run_request(kind, request) for request in get_requests(entry))
+        total = sum(
+            run_request(kind, provider_name, config, request)
+            for request in get_requests(entry)
+        )
         rows.append([label, icon, total, get_severity(total, thresholds)])
 
     return rows
