@@ -15,55 +15,85 @@ monitors = "all"
 [updater]
 output_path = "data/status.local.json"
 
-[providers.work_outlook]
-kind = "outlook"
-
-[providers.work_jira]
-kind = "jira"
-base_url = "https://your-company.atlassian.net"
-api_version = 2
-api_token = ""
-
-[providers.github]
-kind = "github-gh"
-
-[providers.todoist]
-kind = "todoist"
-api_token = ""
+[providers.demo]
+kind = "dummy"
 
 [[entries]]
-provider = "todoist"
-label = "todoist/today"
-icon = ""
-thresholds = { low = 5, medium = 15, high = 30 }
-requests = [
-  { filter = "today | overdue" }
-]
-
-[[entries]]
-provider = "work_outlook"
+provider = "demo"
 label = "email/inbox"
 icon = "󰇮"
-thresholds = { low = 5, medium = 15, high = 30 }
+thresholds = { low = 5, medium = 10, high = 20 }
 requests = [
-  { folders = ["6"] }
+  { key = "email/inbox", start = 18 }
 ]
 
 [[entries]]
-provider = "work_jira"
-label = "jira"
-icon = ""
-thresholds = { low = 1, medium = 3, high = 5 }
+provider = "demo"
+label = "tasks/today"
+icon = ""
+thresholds = { low = 1, medium = 5, high = 10 }
 requests = [
-  { jql = ["assignee = currentUser() AND Status != Closed"] }
+  { key = "tasks/today", start = 12 }
 ]
 
 [[entries]]
-provider = "github"
-label = "reviews"
+provider = "demo"
+label = "github/reviews"
 icon = ""
-thresholds = { low = 1, medium = 3, high = 5 }
+thresholds = { low = 1, medium = 3, high = 6 }
 requests = [
-  { args = ["--state=open", "--assignee=@me"] },
-  { args = ["--state=open", "--review-requested=@me"] }
+  { key = "github/reviews", start = 7 }
 ]
+
+# [providers.work_outlook]
+# kind = "outlook"
+
+# [providers.work_jira]
+# kind = "jira"
+# base_url = "https://your-company.atlassian.net"
+# api_version = 2
+# api_token = ""
+
+# [providers.github]
+# kind = "github-gh"
+
+# [providers.todoist]
+# kind = "todoist"
+# api_token = ""
+
+# [[entries]]
+# provider = "todoist"
+# label = "todoist/today"
+# icon = ""
+# thresholds = { low = 5, medium = 15, high = 30 }
+# requests = [
+#   { filter = "today | overdue" }
+# ]
+
+# [[entries]]
+# provider = "work_outlook"
+# label = "email/inbox"
+# icon = "󰇮"
+# thresholds = { low = 5, medium = 15, high = 30 }
+# requests = [
+#   { folders = ["6"] }
+# ]
+
+# [[entries]]
+# provider = "work_jira"
+# label = "jira"
+# icon = ""
+# thresholds = { low = 1, medium = 3, high = 5 }
+# requests = [
+#   { jql = ["assignee = currentUser() AND Status != Closed"] }
+# ]
+
+# [[entries]]
+# provider = "github"
+# label = "reviews"
+# icon = ""
+# thresholds = { low = 1, medium = 3, high = 5 }
+# requests = [
+#   { args = ["--state=open", "--assignee=@me"] },
+#   { args = ["--state=open", "--review-requested=@me"] }
+# ]

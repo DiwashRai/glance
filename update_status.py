@@ -6,6 +6,7 @@ except ModuleNotFoundError:
     import tomli as tomllib # type: ignore[import-not-found]
 from pathlib import Path
 
+from providers.dummy import get_dummy_count
 from providers.github_gh import get_gh_pr_count
 from providers.jira import get_issue_count
 from providers.outlook_emails import get_unread_email_count
@@ -14,6 +15,7 @@ from providers.todoist import DEFAULT_FILTER, get_task_count
 
 DEFAULT_CONFIG_PATH = "config.toml"
 PROVIDER_FUNCTIONS = {
+    "dummy": get_dummy_count,
     "github-gh": get_gh_pr_count,
     "jira": get_issue_count,
     "outlook": get_unread_email_count,
@@ -218,6 +220,18 @@ def run_todoist_request(fetcher, provider_name, config, request):
     return fetcher(api_token, filter_value=filter_value, lang=lang)
 
 
+def run_dummy_request(fetcher, config, request):
+    key = request.get("key")
+    if not isinstance(key, str) or not key:
+        raise ValueError("Dummy requests require a non-empty 'key' string")
+    return fetcher(
+        resolve_output_path(config, None),
+        key,
+        int(request.get("start", 0)),
+        int(request.get("step", 5)),
+    )
+
+
 def run_request(kind, provider_name, config, request):
     fetcher = PROVIDER_FUNCTIONS.get(kind)
     if fetcher is None:
@@ -234,6 +248,9 @@ def run_request(kind, provider_name, config, request):
 
     if kind == "todoist":
         return run_todoist_request(fetcher, provider_name, config, request)
+
+    if kind == "dummy":
+        return run_dummy_request(fetcher, config, request)
 
     raise ValueError(f"Unsupported provider kind: {kind}")
 

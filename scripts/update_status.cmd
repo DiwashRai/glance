@@ -11,5 +11,5 @@ if not exist "%ROOT%\data\status.local.json" (
   copy /y "%ROOT%\data\status.json" "%ROOT%\data\status.local.json" >nul
 )
 
-python.exe "%ROOT%\update_status.py" --config "%ROOT%\config.local.toml" %*
+python.exe "%ROOT%\update_status.py" %*
 exit /b %errorlevel%
