@@ -1,6 +1,9 @@
 import argparse
 import json
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib # type: ignore[import-not-found]
 from pathlib import Path
 
 from providers.github_gh import get_search_result_count
