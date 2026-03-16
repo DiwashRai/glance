@@ -4,7 +4,11 @@ import ctypes
 import json
 import os
 import tkinter as tk
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib # type: ignore[import-not-found]
+
 from dataclasses import dataclass
 
 
