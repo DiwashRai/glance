@@ -50,11 +50,9 @@ foreach ($item in $defaultFolders) {
 
 $defaultStore = $namespace.Folders.Item(1)
 
-Write-Output "---- All folders (use quoted folder name) ---------------------------"
-
-foreach ($folder in $defaultStore.Folders) {
-    Get-FolderInfo -folder $folder
+foreach ($store in $namespace.Folders) {
+    Write-Output "---- Store: $($store.Name) --------------------------------------"
+    foreach ($folder in $defaultStore.Folders) {
+        Get-FolderInfo -folder $folder
+    }
 }
-
-$defaultResults
-$otherResults | Sort-Object Store, Path
