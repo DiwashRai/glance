@@ -144,6 +144,7 @@ def run_outlook_request(fetcher, provider_name, config, request):
         raise ValueError(
             f"[providers.{provider_name}].outlook_store must be a non-empty string when provided"
         )
+    outlook_store = outlook_store.lower()
 
     folders = request.get("folders")
     if not isinstance(folders, list) or not folders:

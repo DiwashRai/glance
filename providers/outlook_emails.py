@@ -3,6 +3,7 @@ from win32com.client import gencache
 
 
 _UNREAD_COUNT_CACHE = {}
+_DEFAULT_OUTLOOK_STORE = "__unused__"
 
 
 def _make_cache_key(store_name, folder_identifier):
@@ -41,13 +42,12 @@ def _get_unread_count_for_folder(folder, store):
     raise ValueError(f"Could not find Outlook folder: {folder}")
 
 
-def get_unread_email_count(folders, outlook_store=None):
+def get_unread_email_count(folders, outlook_store=_DEFAULT_OUTLOOK_STORE):
     if not isinstance(folders, list):
         raise TypeError("folders must be provided as a list")
-    if outlook_store is not None and not isinstance(outlook_store, str):
-        raise TypeError("outlook_store must be a string when provided")
-    if outlook_store == "":
-        raise ValueError("outlook_store must not be an empty string")
+    if outlook_store is None or outlook_store == "":
+        raise ValueError("outlook_store must not be empty")
+    outlook_store = outlook_store.lower()
 
     outlook = gencache.EnsureDispatch("Outlook.Application")
     namespace = outlook.GetNamespace("MAPI")
@@ -57,11 +57,9 @@ def get_unread_email_count(folders, outlook_store=None):
 
     store = None
     if any(isinstance(folder, str) for folder in folders):
-        if outlook_store is None:
-            raise ValueError("outlook_store is required when folders include names")
         for index in range(1, namespace.Folders.Count + 1):
             candidate = namespace.Folders.Item(index)
-            if str(candidate.Name) == outlook_store:
+            if str(candidate.Name).lower() == outlook_store:
                 store = candidate
                 break
         if store is None:
@@ -97,12 +95,11 @@ def parse_args(argv=None):
     parser.add_argument("folders", nargs="+", help="Folder names or Outlook folder paths.")
     parser.add_argument(
         "--outlook-store",
-        help="Required when folder names are provided; Outlook store name to search.",
+        default=_DEFAULT_OUTLOOK_STORE,
+        help="Outlook store name to search.",
     )
     args = parser.parse_args(argv)
     args.folders = [parse_folder_arg(folder) for folder in args.folders]
-    if any(isinstance(folder, str) for folder in args.folders) and not args.outlook_store:
-        parser.error("--outlook-store is required when folder names are provided.")
     return args
 
 
