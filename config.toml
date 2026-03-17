@@ -47,6 +47,7 @@ requests = [
 
 # [providers.work_outlook]
 # kind = "outlook"
+# outlook_store = "you@example.com"
 
 # [providers.work_jira]
 # kind = "jira"

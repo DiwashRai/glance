@@ -51,11 +51,11 @@ def main():
     for i in range(1, namespace.Folders.Count + 1):
         store = namespace.Folders.Item(i)
         started_at = time.perf_counter()
-        print(f"---- Store: {store.Name} --------------------------------------")
+        print(f"---- Store: \"{store.Name}\" --------------------------------------")
         for j in range(1, store.Folders.Count + 1):
             print_folder(store.Folders.Item(j))
         elapsed = time.perf_counter() - started_at
-        print(f"---- Store: {store.Name} | Elapsed: {elapsed:.2f}s ----------------")
+        print(f"---- Store: \"{store.Name}\" | Elapsed: {elapsed:.2f}s ----------------")
 
     return 0
 

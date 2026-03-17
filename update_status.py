@@ -133,7 +133,18 @@ def get_severity(count, thresholds):
     return 3
 
 
-def run_outlook_request(fetcher, request):
+def run_outlook_request(fetcher, provider_name, config, request):
+    providers = get_table(config, "providers")
+    provider = providers.get(provider_name)
+    if not isinstance(provider, dict):
+        raise ValueError(f"[providers.{provider_name}] must be a TOML table")
+
+    outlook_store = provider.get("outlook_store")
+    if not isinstance(outlook_store, str) or not outlook_store:
+        raise ValueError(
+            f"[providers.{provider_name}].outlook_store must be a non-empty string when provided"
+        )
+
     folders = request.get("folders")
     if not isinstance(folders, list) or not folders:
         raise ValueError(
@@ -156,7 +167,7 @@ def run_outlook_request(fetcher, request):
             "Outlook requests require at least one folder in 'folders'"
         )
 
-    return fetcher(folder_list)
+    return fetcher(folder_list, outlook_store=outlook_store)
 
 
 def run_jira_request(fetcher, provider_name, config, request):
@@ -238,7 +249,7 @@ def run_request(kind, provider_name, config, request):
         raise ValueError(f"Unsupported provider kind: {kind}")
 
     if kind == "outlook":
-        return run_outlook_request(fetcher, request)
+        return run_outlook_request(fetcher, provider_name, config, request)
 
     if kind == "jira":
         return run_jira_request(fetcher, provider_name, config, request)
