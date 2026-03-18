@@ -1,0 +1,2 @@
+pywin32; platform_system == "Windows"
+tomli; python_version < "3.11"
