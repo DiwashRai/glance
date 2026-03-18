@@ -248,7 +248,7 @@ class GlanceWindow:
         for symbol, value, color in items:
             cell = tk.Frame(self.row, bg=BG)
             cell.pack(side="left", padx=(0, 8))
-            self.add_label(f"{symbol}:", LABEL_FG, parent=cell)
+            self.add_label(symbol, LABEL_FG, parent=cell)
             self.add_label(value, color, parent=cell, padx=(4, 0))
 
     def add_label(self, text, color, parent=None, padx=(0, 0)):
