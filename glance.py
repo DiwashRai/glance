@@ -117,6 +117,10 @@ class GlanceApp:
         except Exception as exc:
             self.update_windows(GlanceWindow.render_error, str(exc))
 
+        for window in self.windows:
+            window.root.attributes("-topmost", True)
+            window.root.lift()
+
         self.root.after(self.config.poll * MS_PER_SECOND, self.refresh_status)
 
     def update_windows(self, render_method, *args):
@@ -208,6 +212,7 @@ class GlanceWindow:
             y = self.monitor.bottom - height - self.config.y_offset
 
         self.root.geometry(f"+{x}+{y}")
+        self.root.update_idletasks()
 
     def set_click_through(self):
         if os.name != "nt":
