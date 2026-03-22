@@ -2,14 +2,13 @@ import argparse
 import json
 import subprocess
 import sys
+from collections.abc import Sequence
 
 
 def _run_no_window(*args, **kwargs):
     if sys.platform.startswith("win"):
         creationflags = kwargs.pop("creationflags", 0)
-        kwargs["creationflags"] = creationflags | getattr(
-            subprocess, "CREATE_NO_WINDOW", 0
-        )
+        kwargs["creationflags"] = creationflags | getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
         startupinfo = kwargs.get("startupinfo")
         if startupinfo is None:
@@ -24,11 +23,11 @@ def _run_no_window(*args, **kwargs):
     return subprocess.run(*args, **kwargs)
 
 
-def get_gh_pr_count(requests):
+def get_gh_pr_count(requests: Sequence[str]) -> int:
     if not isinstance(requests, list) or not requests:
         raise TypeError("requests must be provided as a non-empty list")
 
-    urls = {}
+    urls: dict[str, object] = {}
     for args in requests:
         if not isinstance(args, list) or not args:
             raise TypeError("each request must be a non-empty list")
@@ -52,10 +51,8 @@ def get_gh_pr_count(requests):
     return len(urls)
 
 
-def parse_args(argv=None):
-    parser = argparse.ArgumentParser(
-        description="Return GitHub PR search results from gh CLI."
-    )
+def parse_args(argv: Sequence[str] | None = None):
+    parser = argparse.ArgumentParser(description="Return GitHub PR search results from gh CLI.")
     parser.add_argument(
         "args",
         nargs="+",
@@ -64,7 +61,7 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None):
     args = parse_args(argv)
     print(get_gh_pr_count([args.args]))
     return 0

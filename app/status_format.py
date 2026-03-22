@@ -1,7 +1,10 @@
 import json
+from typing import cast
+
+from app.types import StatusFile, StatusFileRow
 
 
-def format_status_payload(payload):
+def format_status_payload(payload: StatusFile) -> str:
     lines = ["{"]
     items = list(payload.items())
 
@@ -10,6 +13,7 @@ def format_status_payload(payload):
         dumped_key = json.dumps(key, ensure_ascii=False)
 
         if key == "f" and isinstance(value, list):
+            value = cast(StatusFileRow, value)
             lines.append(f"  {dumped_key}: [")
             for row_index, row in enumerate(value):
                 row_suffix = "," if row_index < len(value) - 1 else ""

@@ -1,9 +1,10 @@
 import json
 import urllib.request
+from collections.abc import Sequence
 
 
-def fetch_jira_query_issue_ids(base_url, api_version, token, jql):
-    issue_ids = set()
+def fetch_jira_query_issue_ids(base_url: str, api_version: int, token: str, jql: str):
+    issue_ids: set[str] = set()
     start_at = 0
 
     while True:
@@ -40,8 +41,8 @@ def fetch_jira_query_issue_ids(base_url, api_version, token, jql):
             return issue_ids
 
 
-def get_issue_count(base_url, api_version, token, jqls):
-    issue_ids = set()
+def get_issue_count(base_url: str, api_version: int, token: str, jqls: Sequence[str]) -> int:
+    issue_ids: set[str] = set()
     for jql in jqls:
         issue_ids.update(fetch_jira_query_issue_ids(base_url, api_version, token, jql))
     return len(issue_ids)

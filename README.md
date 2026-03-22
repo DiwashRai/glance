@@ -42,6 +42,32 @@ python.exe "C:\path\to\update_status.py" --config "C:\path\to\config.local.toml"
 Use python.exe and not pythonw.exe if you are making sure that it's starting up and running fine
 otherwise you have to kill the process from task manager or using taskkill.
 
+## Development
+
+Install the project with the dev extras to get Ruff:
+
+```bat
+python -m pip install -e ".[dev]"
+```
+
+Run the linter:
+
+```bat
+python -m ruff check .
+```
+
+Apply safe auto-fixes where available:
+
+```bat
+python -m ruff check . --fix
+```
+
+Format the codebase:
+
+```bat
+python -m ruff format .
+```
+
 ### With Task Scheduler:
 - Create a task that triggers on logon. Add a delay if you want.
 - General: Set 'Run only when user is logged on'

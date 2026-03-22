@@ -1,6 +1,7 @@
 import argparse
-from win32com.client import gencache
+from collections.abc import Sequence
 
+from win32com.client import gencache
 
 _UNREAD_COUNT_CACHE = {}
 _DEFAULT_OUTLOOK_STORE = "__unused__"
@@ -10,7 +11,7 @@ def _make_cache_key(store_name, folder_identifier):
     return f"{store_name}::{folder_identifier}"
 
 
-def _get_unread_count_for_folder(folder, store):
+def _get_unread_count_for_folder(folder, store) -> int:
     store_name = str(store.Name)
     cache_key = _make_cache_key(store_name, folder)
     if cache_key in _UNREAD_COUNT_CACHE:
@@ -42,15 +43,24 @@ def _get_unread_count_for_folder(folder, store):
     raise ValueError(f"Could not find Outlook folder: {folder}")
 
 
-def get_unread_email_count(folders, outlook_store=_DEFAULT_OUTLOOK_STORE):
+def get_unread_email_count(
+    folders: Sequence[str | int], outlook_store: str = _DEFAULT_OUTLOOK_STORE
+) -> int:
     if not isinstance(folders, list):
         raise TypeError("folders must be provided as a list")
-    if outlook_store is None or outlook_store == "":
+    if outlook_store == "":
         raise ValueError("outlook_store must not be empty")
     outlook_store = outlook_store.lower()
 
-    outlook = gencache.EnsureDispatch("Outlook.Application")
-    namespace = outlook.GetNamespace("MAPI")
+    try:
+        outlook = gencache.EnsureDispatch("Outlook.Application")
+        namespace = outlook.GetNamespace("MAPI")
+    except Exception as exc:
+        raise RuntimeError(
+            "Could not connect to classic Outlook via COM. "
+            "This usually means classic Outlook is not installed, "
+            "you are using the new Outlook app, or Outlook is not available on this machine."
+        ) from exc
 
     if len(folders) == 1 and isinstance(folders[0], int):
         return int(namespace.GetDefaultFolder(folders[0]).UnReadItemCount)
@@ -72,11 +82,7 @@ def get_unread_email_count(folders, outlook_store=_DEFAULT_OUTLOOK_STORE):
             total += int(get_default_folder(folder).UnReadItemCount)
             continue
 
-        if isinstance(folder, str):
-            total += _get_unread_count_for_folder(folder, store)
-            continue
-
-        raise TypeError("Outlook folders must be strings or integers")
+        total += _get_unread_count_for_folder(folder, store)
 
     return total
 

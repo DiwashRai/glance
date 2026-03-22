@@ -1,4 +1,6 @@
 
 __pycache__/
+.ruff_cache/
+*.egg-info/
 config.local.toml
 data/status.local.json

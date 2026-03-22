@@ -7,8 +7,11 @@ name = "glance"
 version = "0.1.0"
 description = "A lightweight desktop renderer and status collector for glanceable notifications."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 keywords = ["notifications", "statusbar", "desktop", "tkinter"]
+
+[project.optional-dependencies]
+dev = ["ruff"]
 
 [project.scripts]
 glance-renderer = "glance:main"
@@ -19,3 +22,16 @@ py-modules = ["glance", "update_status"]
 
 [tool.setuptools.packages.find]
 include = ["providers*"]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "C4", "B", "SIM", "RET"]
+fixable = ["ALL"]
