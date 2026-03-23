@@ -4,7 +4,7 @@ name: Update Glance Status
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7,22,37,52 * * * *"
 
 jobs:
   update-status:
@@ -38,7 +38,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
-          python update_status.py --config config.local.toml
+          python update_status.py
 
       - name: Update gist
         env:

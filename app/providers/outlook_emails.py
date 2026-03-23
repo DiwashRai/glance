@@ -1,10 +1,21 @@
 import argparse
+import sys
 from collections.abc import Sequence
 
-from win32com.client import gencache
+if sys.platform == "win32":
+    from win32com.client import gencache
+else:
+    gencache = None
 
 _UNREAD_COUNT_CACHE = {}
 _DEFAULT_OUTLOOK_STORE = "__unused__"
+
+
+def _require_windows_outlook() -> None:
+    if sys.platform != "win32" or gencache is None:
+        raise RuntimeError(
+            "Outlook COM is only supported on Windows with pywin32/classic Outlook installed."
+        )
 
 
 def _make_cache_key(store_name, folder_identifier):
@@ -46,6 +57,8 @@ def _get_unread_count_for_folder(folder, store) -> int:
 def get_unread_email_count(
     folders: Sequence[str | int], outlook_store: str = _DEFAULT_OUTLOOK_STORE
 ) -> int:
+    _require_windows_outlook()
+
     if not isinstance(folders, list):
         raise TypeError("folders must be provided as a list")
     if outlook_store == "":

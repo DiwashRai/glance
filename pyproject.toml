@@ -21,7 +21,7 @@ glance-collector = "update_status:main"
 py-modules = ["glance", "update_status"]
 
 [tool.setuptools.packages.find]
-include = ["providers*"]
+include = ["app*"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
