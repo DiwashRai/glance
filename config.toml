@@ -17,6 +17,7 @@ output_path = "data/status.local.json"
 
 [providers.demo]
 kind = "dummy"
+output_path = "data/status.local.json"
 
 [[entries]]
 provider = "demo"

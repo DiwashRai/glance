@@ -3,29 +3,18 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeAlias, cast
+from typing import cast
 
 if sys.version_info >= (3, 11):
     import tomllib
 else:
     import tomli as tomllib
 
-from app.providers.dummy import get_dummy_count
-from app.providers.github_gh import get_gh_pr_count
-from app.providers.jira import get_issue_count
-from app.providers.outlook_emails import get_unread_email_count
-from app.providers.todoist import DEFAULT_FILTER, get_task_count
+from app.providers.registry import provider_registry
 from app.status_format import format_status_payload
-from app.types import ProviderFunction, StatusFile, StatusFileRow
+from app.types import ProviderContext, StatusFile, StatusFileRow, TomlValue
 
 DEFAULT_CONFIG_PATH = "config.local.toml"
-PROVIDER_FUNCTIONS: dict[str, ProviderFunction] = {
-    "dummy": get_dummy_count,
-    "github-gh": get_gh_pr_count,
-    "jira": get_issue_count,
-    "outlook": get_unread_email_count,
-    "todoist": get_task_count,
-}
 
 
 @dataclass(slots=True)
@@ -33,9 +22,6 @@ class CliArgs:
     config: Path
     output: Path | None = None
     dry_run: bool = False
-
-
-TomlValue: TypeAlias = str | int | float | bool | list["TomlValue"] | dict[str, "TomlValue"]
 
 
 @dataclass(slots=True)
@@ -214,148 +200,32 @@ def get_severity(count: int, thresholds: Thresholds) -> int:
     return 3
 
 
-def run_outlook_request(
-    fetcher: ProviderFunction,
-    provider_name: str,
-    config: AppTomlConfig,
-    request: dict[str, TomlValue],
-) -> int:
-    provider = config.providers[provider_name]
-    outlook_store = provider["outlook_store"]
-    if not isinstance(outlook_store, str) or not outlook_store:
-        raise ValueError(
-            f"[providers.{provider_name}].outlook_store must be a non-empty string when provided"
-        )
-    outlook_store = outlook_store.lower()
-
-    folders = request.get("folders")
-    if not isinstance(folders, list) or not folders:
-        raise ValueError("Outlook requests require a non-empty 'folders' list")
-
-    folder_list: list[int | str] = []
-    for folder in folders:
-        if not isinstance(folder, str) or not folder:
-            raise ValueError("Outlook folder list items must be non-empty strings")
-        if folder.isdigit():
-            folder_list.append(int(folder))
-        else:
-            folder_list.append(folder)
-
-    if not folder_list:
-        raise ValueError("Outlook requests require at least one folder in 'folders'")
-
-    return fetcher(folder_list, outlook_store=outlook_store)
-
-
-def run_jira_request(
-    fetcher: ProviderFunction,
-    provider_name: str,
-    config: AppTomlConfig,
-    request: dict[str, TomlValue],
-) -> int:
-    provider = config.providers[provider_name]
-    base_url = provider["base_url"]
-    if not isinstance(base_url, str) or not base_url:
-        raise ValueError(f"[providers.{provider_name}].base_url must be a non-empty string")
-
-    api_version = provider.get("api_version")
-    if not isinstance(api_version, (int, str)) or not str(api_version):
-        raise ValueError(f"[providers.{provider_name}].api_version must be set")
-
-    api_token = provider.get("api_token")
-    if not isinstance(api_token, str) or not api_token:
-        raise ValueError(f"[providers.{provider_name}].api_token must be a non-empty string")
-
-    jql = request.get("jql")
-    if not isinstance(jql, list) or not jql:
-        raise ValueError("Jira requests require a non-empty 'jql' list")
-
-    jqls: list[str] = []
-    for item in jql:
-        if not isinstance(item, str) or not item:
-            raise ValueError("Jira jql items must be non-empty strings")
-        jqls.append(item)
-
-    return fetcher(base_url, api_version, api_token, jqls)
-
-
-def run_github_gh_request(fetcher: ProviderFunction, request: dict[str, TomlValue]) -> int:
-    args = request.get("args")
-    if not isinstance(args, list) or not args:
-        raise ValueError("GitHub requests require a non-empty 'args' list")
-    return fetcher([args])
-
-
-def run_todoist_request(
-    fetcher: ProviderFunction,
-    provider_name: str,
-    config: AppTomlConfig,
-    request: dict[str, TomlValue],
-) -> int:
-    provider = config.providers[provider_name]
-    api_token = provider["api_token"]
-    if not isinstance(api_token, str) or not api_token:
-        raise ValueError(f"[providers.{provider_name}].api_token must be a non-empty string")
-
-    filter_value = request.get("filter")
-    if filter_value is None:
-        filter_value = request.get("query", DEFAULT_FILTER)
-    if not isinstance(filter_value, str) or not filter_value:
-        raise ValueError("Todoist requests require 'filter' to be a non-empty string")
-
-    lang = request.get("lang")
-    if lang is not None and (not isinstance(lang, str) or not lang):
-        raise ValueError("Todoist request 'lang' must be a non-empty string when provided")
-
-    return fetcher(api_token, filter_value=filter_value, lang=lang)
-
-
-def run_dummy_request(
-    fetcher: ProviderFunction, config: AppTomlConfig, request: dict[str, TomlValue]
-) -> int:
-    key = request["key"]
-    if not isinstance(key, str) or not key:
-        raise ValueError("Dummy requests require a non-empty 'key' string")
-    start = request["start"]
-    step = request["step"]
-    if not isinstance(start, int) or not isinstance(step, int):
-        raise ValueError("Dummy requests require 'start' and 'step' to be ints")
-    return fetcher(config.updater.output_path, key, start, step)
-
-
 def run_request(
-    kind: str, provider_name: str, config: AppTomlConfig, request: dict[str, TomlValue]
+    kind: str, provider_name: str, config: AppTomlConfig, requests: list[dict[str, TomlValue]]
 ) -> int:
-    fetcher = PROVIDER_FUNCTIONS[kind]
-    request_count = 0
-    if kind == "outlook":
-        request_count = run_outlook_request(fetcher, provider_name, config, request)
-
-    if kind == "jira":
-        request_count = run_jira_request(fetcher, provider_name, config, request)
-
-    if kind == "github-gh":
-        request_count = run_github_gh_request(fetcher, request)
-
-    if kind == "todoist":
-        request_count = run_todoist_request(fetcher, provider_name, config, request)
-
-    if kind == "dummy":
-        request_count = run_dummy_request(fetcher, config, request)
-
-    return request_count
+    provider = provider_registry.create(kind)
+    return provider.count(
+        ProviderContext(
+            provider_name=provider_name,
+            provider_config=config.providers[provider_name],
+            requests=requests,
+        )
+    )
 
 
 def build_status_rows(config: AppTomlConfig) -> list[StatusFileRow]:
     rows: list[StatusFileRow] = []
     for entry in config.entries:
-        provider_kind = get_provider_kind(config, entry.provider)
-        total = 0
-        total = sum(
-            run_request(provider_kind, entry.provider, config, request)
-            for request in entry.requests
-        )
-        rows.append((entry.label, entry.icon, total, get_severity(total, entry.thresholds)))
+        try:
+            provider_kind = get_provider_kind(config, entry.provider)
+            total = run_request(provider_kind, entry.provider, config, entry.requests)
+            rows.append((entry.label, entry.icon, total, get_severity(total, entry.thresholds)))
+        except Exception as exc:
+            print(
+                f"Failed to update '{entry.label}' from provider '{entry.provider}': {exc}",
+                file=sys.stderr,
+            )
+            rows.append((entry.label, entry.icon, -1, 3))
 
     return rows
 

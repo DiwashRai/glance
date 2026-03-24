@@ -1,11 +1,13 @@
-import argparse
 import json
 from collections.abc import Sequence
+from typing import ClassVar
 
+from app.providers.registry import provider_registry
+from app.types import ProviderContext
 from app.utils import run_no_window
 
 
-def get_gh_pr_count(requests: Sequence[str]) -> int:
+def get_gh_pr_count(requests: Sequence[Sequence[str]]) -> int:
     if not isinstance(requests, list) or not requests:
         raise TypeError("requests must be provided as a non-empty list")
 
@@ -28,21 +30,29 @@ def get_gh_pr_count(requests: Sequence[str]) -> int:
     return len(urls)
 
 
-def parse_args(argv: Sequence[str] | None = None):
-    parser = argparse.ArgumentParser(description="Return GitHub PR search results from gh CLI.")
-    parser.add_argument(
-        "args",
-        nargs="+",
-        help="Arguments to pass through to gh search prs.",
-    )
-    return parser.parse_args(argv)
+def _parse_github_gh_input(ctx: ProviderContext) -> list[list[str]]:
+    args_list: list[list[str]] = []
+    for request in ctx.requests:
+        args = request.get("args")
+        if not isinstance(args, list) or not args:
+            raise ValueError("GitHub requests require a non-empty 'args' list")
+
+        parsed_args: list[str] = []
+        for arg in args:
+            if not isinstance(arg, str) or not arg:
+                raise ValueError("GitHub args items must be non-empty strings")
+            parsed_args.append(arg)
+
+        args_list.append(parsed_args)
+
+    return args_list
 
 
-def main(argv: Sequence[str] | None = None):
-    args = parse_args(argv)
-    print(get_gh_pr_count([args.args]))
-    return 0
+class GithubGhProvider:
+    kind: ClassVar[str] = "github-gh"
+
+    def count(self, ctx: ProviderContext) -> int:
+        return get_gh_pr_count(_parse_github_gh_input(ctx))
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+provider_registry.register(GithubGhProvider)

@@ -1,13 +1,14 @@
-import argparse
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Sequence
-from typing import TypeAlias, TypedDict, cast
+from typing import ClassVar, TypeAlias, TypedDict, cast
+
+from app.providers.registry import provider_registry
+from app.types import ProviderContext
 
 TODOIST_FILTER_URL = "https://api.todoist.com/api/v1/tasks/filter"
-DEFAULT_FILTER = "today | overdue"
 DEFAULT_PAGE_SIZE = 200
 
 
@@ -57,9 +58,7 @@ def parse_todoist_tasks(payload: dict[str, object]) -> list[TodoistTask]:
     return [parse_todoist_task(item) for item in results]
 
 
-def fetch_todoist_tasks(
-    api_token: str, filter_value: str = DEFAULT_FILTER, lang: str = ""
-) -> list[TodoistTask]:
+def fetch_todoist_tasks(api_token: str, filter_value: str, lang: str = "") -> list[TodoistTask]:
     if not api_token:
         raise ValueError("api_token must be a non-empty string")
     if not filter_value:
@@ -107,33 +106,45 @@ def fetch_todoist_tasks(
             raise RuntimeError("Todoist response contained an invalid next_cursor value")
 
 
-def get_task_count(api_token: str, filter_value: str = DEFAULT_FILTER, lang: str = "") -> int:
-    return len(fetch_todoist_tasks(api_token, filter_value=filter_value, lang=lang))
+def get_task_count(api_token: str, filter_values: Sequence[str], lang: str = "") -> int:
+    task_ids: set[str] = set()
+    for filter_value in filter_values:
+        for task in fetch_todoist_tasks(api_token, filter_value=filter_value, lang=lang):
+            task_ids.add(task["id"])
+    return len(task_ids)
 
 
-def parse_args(argv: Sequence[str] | None = None):
-    parser = argparse.ArgumentParser(
-        description="Return active Todoist task counts for a filter query."
-    )
-    parser.add_argument("api_token", help="Todoist API token.")
-    parser.add_argument(
-        "--filter",
-        dest="filter_value",
-        default=DEFAULT_FILTER,
-        help="Todoist filter string. Defaults to today's active tasks.",
-    )
-    parser.add_argument(
-        "--lang",
-        help="Optional filter language if not using the default Todoist account language.",
-    )
-    return parser.parse_args(argv)
+def _parse_todoist_input(ctx: ProviderContext) -> tuple[str, list[str], str]:
+    api_token = ctx.provider_config.get("api_token")
+    if not isinstance(api_token, str) or not api_token:
+        raise ValueError(f"[providers.{ctx.provider_name}].api_token must be a non-empty string")
+
+    filter_values: list[str] = []
+    lang = ""
+    for request in ctx.requests:
+        filter_value = request.get("filter")
+        if filter_value is None:
+            filter_value = request.get("query")
+        if not isinstance(filter_value, str) or not filter_value:
+            raise ValueError("Todoist requests require 'filter' to be a non-empty string")
+
+        request_lang = request.get("lang")
+        if request_lang is not None and (not isinstance(request_lang, str) or not request_lang):
+            raise ValueError("Todoist request 'lang' must be a non-empty string when provided")
+        if request_lang is not None:
+            lang = request_lang
+
+        filter_values.append(filter_value)
+
+    return api_token, filter_values, lang
 
 
-def main(argv: Sequence[str] | None = None):
-    args = parse_args(argv)
-    print(get_task_count(args.api_token, filter_value=args.filter_value, lang=args.lang))
-    return 0
+class TodoistProvider:
+    kind: ClassVar[str] = "todoist"
+
+    def count(self, ctx: ProviderContext) -> int:
+        api_token, filter_values, lang = _parse_todoist_input(ctx)
+        return get_task_count(api_token, filter_values=filter_values, lang=lang)
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+provider_registry.register(TodoistProvider)

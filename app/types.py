@@ -1,12 +1,38 @@
-from collections.abc import Callable
-from typing import Literal, TypeAlias, TypedDict
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import ClassVar, Literal, Protocol, TypeAlias, TypedDict
+
+# ---- Renderer Types ------------------------------------------------------------------------
 
 MonitorMode: TypeAlias = Literal["all", "primary"]
 MonitorSelection = MonitorMode | list[int]
+RenderMethod: TypeAlias = Callable[..., None]
+
+# ---- TOML Types ----------------------------------------------------------------------------
+
+TomlValue: TypeAlias = str | int | float | bool | list["TomlValue"] | dict[str, "TomlValue"]
+TomlTable: TypeAlias = Mapping[str, TomlValue]
+
+# ---- Provider Types ------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderContext:
+    provider_name: str
+    provider_config: TomlTable
+    requests: list[TomlTable]
+
+
+class Provider(Protocol):
+    kind: ClassVar[str]
+
+    def count(self, ctx: ProviderContext) -> int: ...
+
+
+# ---- Status Payload Types ------------------------------------------------------------------
+
 StatusFileRow: TypeAlias = tuple[str, str, int, int]
 StatusRow: TypeAlias = tuple[str, str, str]
-RenderMethod: TypeAlias = Callable[..., None]
-ProviderFunction: TypeAlias = Callable[..., int]
 
 
 class StatusFile(TypedDict):

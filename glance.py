@@ -83,7 +83,7 @@ def main():
         GlanceApp(config).run()
     except Exception as exc:
         print(exc)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
 
 class GlanceApp:
