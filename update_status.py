@@ -1,7 +1,10 @@
 import argparse
+import logging
 import sys
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import cast
 
@@ -12,9 +15,14 @@ else:
 
 from app.providers.registry import provider_registry
 from app.status_format import format_status_payload
-from app.types import ProviderContext, StatusFile, StatusFileRow, TomlValue
+from app.types import ProviderContext, StatusFile, StatusFileRow, TomlTable
 
 DEFAULT_CONFIG_PATH = "config.local.toml"
+LOG_DIR = Path("logs")
+ALL_LOG_PATH = LOG_DIR / "update_status.log"
+ERROR_LOG_PATH = LOG_DIR / "update_status.error.log"
+
+logger = logging.getLogger("update_status")
 
 
 @dataclass(slots=True)
@@ -42,13 +50,13 @@ class EntryConfig:
     label: str
     icon: str
     thresholds: Thresholds
-    requests: list[dict[str, TomlValue]]
+    requests: list[TomlTable]
 
 
 @dataclass(slots=True)
 class AppTomlConfig:
     updater: UpdaterConfig = field(default_factory=UpdaterConfig)
-    providers: dict[str, dict[str, TomlValue]] = field(default_factory=dict)  # pyright: ignore[reportUnknownVariableType]
+    providers: dict[str, TomlTable] = field(default_factory=dict)  # pyright: ignore[reportUnknownVariableType]
     entries: list[EntryConfig] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
 
 
@@ -81,6 +89,41 @@ def load_config(config_path: Path) -> AppTomlConfig:
     return parse_toml_config(raw)
 
 
+def configure_logging() -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    formatter = logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers.clear()
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+
+    all_file_handler = RotatingFileHandler(
+        ALL_LOG_PATH,
+        maxBytes=1_000_000,
+        backupCount=1,
+        encoding="utf-8",
+    )
+    all_file_handler.setLevel(logging.INFO)
+    all_file_handler.setFormatter(formatter)
+
+    error_file_handler = RotatingFileHandler(
+        ERROR_LOG_PATH,
+        maxBytes=1_000_000,
+        backupCount=1,
+        encoding="utf-8",
+    )
+    error_file_handler.setLevel(logging.ERROR)
+    error_file_handler.setFormatter(formatter)
+
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(all_file_handler)
+    root_logger.addHandler(error_file_handler)
+
+
 def parse_toml_config(raw: dict[str, object]) -> AppTomlConfig:
     updater_raw = get_table(raw, "updater")
     providers_raw = get_table(raw, "providers")
@@ -90,7 +133,7 @@ def parse_toml_config(raw: dict[str, object]) -> AppTomlConfig:
     if not isinstance(output_path, str):
         raise ValueError("[updater].output_path must be a string")
 
-    providers: dict[str, dict[str, TomlValue]] = {}
+    providers: dict[str, TomlTable] = {}
     for name, value in providers_raw.items():
         if not isinstance(value, dict):
             raise ValueError(f"[providers.{name}] must be a TOML table")
@@ -129,11 +172,11 @@ def parse_entry(raw: dict[str, object], index: int) -> EntryConfig:
         raise ValueError(f"entries[{index}].requests must be a list")
     requests = cast(list[object], requests)
 
-    parsed_requests: list[dict[str, TomlValue]] = []
+    parsed_requests: list[TomlTable] = []
     for j, request in enumerate(requests):
         if not isinstance(request, dict):
             raise ValueError(f"entries[{index}].requests[{j}] must be a TOML table")
-        parsed_requests.append(cast(dict[str, TomlValue], request))
+        parsed_requests.append(cast(TomlTable, request))
 
     return EntryConfig(
         provider=provider,
@@ -201,7 +244,7 @@ def get_severity(count: int, thresholds: Thresholds) -> int:
 
 
 def run_request(
-    kind: str, provider_name: str, config: AppTomlConfig, requests: list[dict[str, TomlValue]]
+    kind: str, provider_name: str, config: AppTomlConfig, requests: list[TomlTable]
 ) -> int:
     provider = provider_registry.create(kind)
     return provider.count(
@@ -216,14 +259,35 @@ def run_request(
 def build_status_rows(config: AppTomlConfig) -> list[StatusFileRow]:
     rows: list[StatusFileRow] = []
     for entry in config.entries:
+        provider_start = time.perf_counter()
+        logger.info("Starting provider '%s' for '%s'", entry.provider, entry.label)
         try:
             provider_kind = get_provider_kind(config, entry.provider)
             total = run_request(provider_kind, entry.provider, config, entry.requests)
+            logger.info(
+                "Finished provider '%s' for '%s' in %.3fs",
+                entry.provider,
+                entry.label,
+                time.perf_counter() - provider_start,
+            )
             rows.append((entry.label, entry.icon, total, get_severity(total, entry.thresholds)))
         except Exception as exc:
-            print(
-                f"Failed to update '{entry.label}' from provider '{entry.provider}': {exc}",
-                file=sys.stderr,
+            logger.error(
+                "Failed to update '%s' from provider '%s': %s",
+                entry.label,
+                entry.provider,
+                exc,
+            )
+            logger.exception(
+                "Traceback for provider failure on '%s' from provider '%s'",
+                entry.label,
+                entry.provider,
+            )
+            logger.info(
+                "Provider '%s' for '%s' failed after %.3fs",
+                entry.provider,
+                entry.label,
+                time.perf_counter() - provider_start,
             )
             rows.append((entry.label, entry.icon, -1, 3))
 
@@ -243,6 +307,9 @@ def publish_status_output(content: str, output_path: Path):
 
 
 def main(argv: Sequence[str] | None = None):
+    configure_logging()
+    run_start = time.perf_counter()
+    logger.info("Starting update_status run")
     args = parse_args(argv)
     config = load_config(args.config)
     payload = build_status_payload(config)
@@ -250,9 +317,11 @@ def main(argv: Sequence[str] | None = None):
 
     if args.dry_run:
         print(content, end="")
+        logger.info("Finished update_status run in %.3fs", time.perf_counter() - run_start)
         return 0
 
     publish_status_output(content, config.updater.output_path)
+    logger.info("Finished update_status run in %.3fs", time.perf_counter() - run_start)
     return 0
 
 

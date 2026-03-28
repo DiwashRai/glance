@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -10,6 +12,9 @@ from app.types import ProviderContext
 
 TODOIST_FILTER_URL = "https://api.todoist.com/api/v1/tasks/filter"
 DEFAULT_PAGE_SIZE = 200
+MAX_PAGES = 10
+MAX_RETRIES = 5
+logger = logging.getLogger(__name__)
 
 
 class TodoistTask(TypedDict):
@@ -26,7 +31,6 @@ def parse_todoist_task(task: object) -> TodoistTask:
     if not isinstance(task, dict):
         raise TypeError("Task must be a JSON object")
     task = cast(dict[str, object], task)
-    print(task)
 
     task_id = task.get("id")
     priority = task.get("priority")
@@ -67,7 +71,7 @@ def fetch_todoist_tasks(api_token: str, filter_value: str, lang: str = "") -> li
     task_list: list[TodoistTask] = []
     cursor = None
 
-    while True:
+    for _ in range(MAX_PAGES):
         params = {
             "query": filter_value,
             "limit": DEFAULT_PAGE_SIZE,
@@ -82,16 +86,25 @@ def fetch_todoist_tasks(api_token: str, filter_value: str, lang: str = "") -> li
             method="GET",
         )
 
-        try:
-            with urllib.request.urlopen(request) as response:
-                payload = json.load(response)
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace").strip()
-            raise RuntimeError(
-                f"Todoist request failed with HTTP {exc.code}: {detail or exc.reason}"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Todoist request failed: {exc.reason}") from exc
+        payload = None
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                with urllib.request.urlopen(request) as response:
+                    payload = json.load(response)
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code in (502, 503) and attempt < MAX_RETRIES:
+                    delay = min(2**attempt, 8)
+                    logger.warning(
+                        f"Todoist request failed with HTTP {exc.code}: {exc.reason}. "
+                        f"Retrying in {delay}s (attempt {attempt + 2}/{MAX_RETRIES + 1})"
+                    )
+                    time.sleep(delay)
+                    continue
+                detail = exc.read().decode("utf-8", errors="replace").strip()
+                raise RuntimeError(
+                    f"Todoist request failed with HTTP {exc.code}: {detail or exc.reason}"
+                ) from exc
 
         if not isinstance(payload, dict):
             raise RuntimeError("Todoist response must be a JSON object")
@@ -101,9 +114,11 @@ def fetch_todoist_tasks(api_token: str, filter_value: str, lang: str = "") -> li
 
         cursor = payload.get("next_cursor")
         if cursor is None:
-            return task_list
+            break
         if not isinstance(cursor, str) or not cursor:
             raise RuntimeError("Todoist response contained an invalid next_cursor value")
+
+    return task_list
 
 
 def get_task_count(api_token: str, filter_values: Sequence[str], lang: str = "") -> int:
