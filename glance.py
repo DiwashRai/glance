@@ -14,7 +14,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from app.types import MonitorMode, MonitorSelection, RenderMethod, StatusFile, StatusRow
+from app.types import CountsRow, MonitorMode, MonitorSelection, RenderMethod, StatusFile
 
 DEFAULT_CONFIG_PATH = "config.local.toml"
 ALL_CLEAR_TEXT = "✓ clear"
@@ -124,21 +124,21 @@ class GlanceApp:
             if window.locked:
                 window.place()
 
-    def read_status(self) -> tuple[int, list[StatusRow]]:
+    def read_status(self) -> tuple[int, list[CountsRow]]:
         with self.config.path.open(encoding="utf-8") as f:
             data = cast(StatusFile, json.load(f))
 
         if "f" not in data:
             raise ValueError(STATUS_FIELD_MISSING_TEXT)
 
-        rows: list[StatusRow] = []
+        rows: list[CountsRow] = []
         done = 0
-        for _, symbol, count, severity in data["f"]:
+        for label, symbol, count, severity in data["f"]:
             severity = max(0, min(3, severity))
             if count == 0:
                 done += 1
             else:
-                rows.append((symbol, str(count), COLORS[severity]))
+                rows.append((label, symbol, count, severity))
 
         return done, rows
 
@@ -165,7 +165,7 @@ class GlanceWindow:
         if config.click_through:
             self.set_click_through()
 
-    def render(self, done: int, items: Sequence[StatusRow]) -> None:
+    def render(self, done: int, items: Sequence[CountsRow]) -> None:
         self.clear()
         if done > 0 and not items:
             self.add_label(ALL_CLEAR_TEXT, COLORS[0])
@@ -228,12 +228,12 @@ class GlanceWindow:
         for widget in self.row.winfo_children():
             widget.destroy()
 
-    def render_items(self, items: Sequence[StatusRow]) -> None:
-        for symbol, value, color in items:
+    def render_items(self, items: Sequence[CountsRow]) -> None:
+        for _, symbol, count, severity in items:
             cell = tk.Frame(self.row, bg=BG)
             cell.pack(side="left", padx=(0, 8))
             self.add_label(symbol, LABEL_FG, parent=cell)
-            self.add_label(value, color, parent=cell, padx=(4, 0))
+            self.add_label(str(count), COLORS[severity], parent=cell, padx=(4, 0))
 
     def add_label(
         self, text: str, color: str, parent: tk.Misc | None = None, padx: tuple[int, int] = (0, 0)

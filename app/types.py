@@ -31,9 +31,8 @@ class Provider(Protocol):
 
 # ---- Status Payload Types ------------------------------------------------------------------
 
-StatusFileRow: TypeAlias = tuple[str, str, int, int]
-StatusRow: TypeAlias = tuple[str, str, str]
+CountsRow: TypeAlias = tuple[str, str, int, int]
 
 
 class StatusFile(TypedDict):
-    f: list[StatusFileRow]
+    f: list[CountsRow]

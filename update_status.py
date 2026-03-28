@@ -15,7 +15,7 @@ else:
 
 from app.providers.registry import provider_registry
 from app.status_format import format_status_payload
-from app.types import ProviderContext, StatusFile, StatusFileRow, TomlTable
+from app.types import CountsRow, ProviderContext, StatusFile, TomlTable
 
 DEFAULT_CONFIG_PATH = "config.local.toml"
 LOG_DIR = Path("logs")
@@ -256,8 +256,8 @@ def run_request(
     )
 
 
-def build_status_rows(config: AppTomlConfig) -> list[StatusFileRow]:
-    rows: list[StatusFileRow] = []
+def build_status_rows(config: AppTomlConfig) -> list[CountsRow]:
+    rows: list[CountsRow] = []
     for entry in config.entries:
         provider_start = time.perf_counter()
         logger.info("Starting provider '%s' for '%s'", entry.provider, entry.label)
