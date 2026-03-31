@@ -139,4 +139,4 @@ class OutlookProvider:
         return get_unread_email_count(folder_list, outlook_store=outlook_store)
 
 
-provider_registry.register(OutlookProvider)
+provider_registry.register_count_provider(OutlookProvider)

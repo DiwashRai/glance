@@ -87,4 +87,4 @@ class JiraProvider:
         return get_issue_count(base_url, api_version, api_token, jqls)
 
 
-provider_registry.register(JiraProvider)
+provider_registry.register_count_provider(JiraProvider)

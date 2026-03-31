@@ -15,7 +15,13 @@ else:
 
 from app.providers.registry import provider_registry
 from app.status_format import format_status_payload
-from app.types import CountsRow, ProviderContext, StatusFile, TomlTable
+from app.types import (
+    CountsRow,
+    ProviderContext,
+    StatusFile,
+    TimeBlockRow,
+    TomlTable,
+)
 
 DEFAULT_CONFIG_PATH = "config.local.toml"
 LOG_DIR = Path("logs")
@@ -54,10 +60,17 @@ class EntryConfig:
 
 
 @dataclass(slots=True)
+class TimeBlockConfig:
+    provider: str
+    requests: list[TomlTable]
+
+
+@dataclass(slots=True)
 class AppTomlConfig:
     updater: UpdaterConfig = field(default_factory=UpdaterConfig)
     providers: dict[str, TomlTable] = field(default_factory=dict)  # pyright: ignore[reportUnknownVariableType]
     entries: list[EntryConfig] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    time_blocking: TimeBlockConfig | None = None
 
 
 def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
@@ -128,6 +141,7 @@ def parse_toml_config(raw: dict[str, object]) -> AppTomlConfig:
     updater_raw = get_table(raw, "updater")
     providers_raw = get_table(raw, "providers")
     entries_raw = get_entries(raw)
+    time_blocking_raw = raw.get("time_blocking")
 
     output_path = updater_raw.get("output_path", "data/status.local.json")
     if not isinstance(output_path, str):
@@ -141,10 +155,15 @@ def parse_toml_config(raw: dict[str, object]) -> AppTomlConfig:
 
     entries = [parse_entry(entry, i) for i, entry in enumerate(entries_raw)]
 
+    time_blocking = None
+    if isinstance(time_blocking_raw, dict):
+        time_blocking = parse_time_blocking(cast(dict[str, object], time_blocking_raw))
+
     return AppTomlConfig(
         updater=UpdaterConfig(output_path=Path(output_path)),
         providers=providers,
         entries=entries,
+        time_blocking=time_blocking,
     )
 
 
@@ -173,9 +192,9 @@ def parse_entry(raw: dict[str, object], index: int) -> EntryConfig:
     requests = cast(list[object], requests)
 
     parsed_requests: list[TomlTable] = []
-    for j, request in enumerate(requests):
+    for i, request in enumerate(requests):
         if not isinstance(request, dict):
-            raise ValueError(f"entries[{index}].requests[{j}] must be a TOML table")
+            raise ValueError(f"entries[{index}].requests[{i}] must be a TOML table")
         parsed_requests.append(cast(TomlTable, request))
 
     return EntryConfig(
@@ -183,6 +202,28 @@ def parse_entry(raw: dict[str, object], index: int) -> EntryConfig:
         label=label,
         icon=icon,
         thresholds=parse_thresholds(thresholds),
+        requests=parsed_requests,
+    )
+
+
+def parse_time_blocking(raw: dict[str, object]) -> TimeBlockConfig:
+    provider = raw.get("provider")
+    requests = raw.get("requests", [])
+
+    if not isinstance(provider, str) or not provider:
+        raise ValueError("time_blocking.provider must be a non-empty string")
+    if not isinstance(requests, list):
+        raise ValueError("time_blocking.requests must be a list")
+    requests = cast(list[object], requests)
+
+    parsed_requests: list[TomlTable] = []
+    for i, request in enumerate(requests):
+        if not isinstance(request, dict):
+            raise ValueError(f"time_blocking.requests[{i}] must be a TOML table")
+        parsed_requests.append(cast(TomlTable, request))
+
+    return TimeBlockConfig(
+        provider=provider,
         requests=parsed_requests,
     )
 
@@ -223,13 +264,11 @@ def get_entries(config: dict[str, object]) -> list[dict[str, object]]:
 
 def get_provider_kind(config: AppTomlConfig, provider_name: str):
     provider = config.providers.get(provider_name)
-    if not isinstance(provider, dict):
-        raise ValueError(f"[providers.{provider_name}] must be a TOML table")
-
+    if provider is None:
+        raise ValueError(f"[providers.{provider_name}] config not found")
     kind = provider.get("kind")
     if not isinstance(kind, str) or not kind:
         raise ValueError(f"[providers.{provider_name}].kind must be a non-empty string")
-
     return kind
 
 
@@ -246,7 +285,7 @@ def get_severity(count: int, thresholds: Thresholds) -> int:
 def run_request(
     kind: str, provider_name: str, config: AppTomlConfig, requests: list[TomlTable]
 ) -> int:
-    provider = provider_registry.create(kind)
+    provider = provider_registry.create_count_provider(kind)
     return provider.count(
         ProviderContext(
             provider_name=provider_name,
@@ -260,42 +299,73 @@ def build_status_rows(config: AppTomlConfig) -> list[CountsRow]:
     rows: list[CountsRow] = []
     for entry in config.entries:
         provider_start = time.perf_counter()
-        logger.info("Starting provider '%s' for '%s'", entry.provider, entry.label)
+        logger.info(f"Starting provider '{entry.provider}' for '{entry.label}'")
         try:
             provider_kind = get_provider_kind(config, entry.provider)
             total = run_request(provider_kind, entry.provider, config, entry.requests)
             logger.info(
-                "Finished provider '%s' for '%s' in %.3fs",
-                entry.provider,
-                entry.label,
-                time.perf_counter() - provider_start,
+                f"Finished provider '{entry.provider}' for '{entry.label}'"
+                f" in {time.perf_counter() - provider_start:.3f}s"
             )
-            rows.append((entry.label, entry.icon, total, get_severity(total, entry.thresholds)))
+            rows.append(
+                CountsRow(entry.label, entry.icon, total, get_severity(total, entry.thresholds))
+            )
         except Exception as exc:
             logger.error(
-                "Failed to update '%s' from provider '%s': %s",
-                entry.label,
-                entry.provider,
-                exc,
+                f"Failed to update '{entry.label}' from provider '{entry.provider}': {exc}"
             )
             logger.exception(
-                "Traceback for provider failure on '%s' from provider '%s'",
-                entry.label,
-                entry.provider,
+                f"Traceback for provider failure on '{entry.label}'"
+                f" from provider '{entry.provider}'"
             )
             logger.info(
-                "Provider '%s' for '%s' failed after %.3fs",
-                entry.provider,
-                entry.label,
-                time.perf_counter() - provider_start,
+                f"Provider '{entry.provider}' for '{entry.label}'"
+                f" failed after {time.perf_counter() - provider_start:.3f}s"
             )
-            rows.append((entry.label, entry.icon, -1, 3))
+            rows.append(CountsRow(entry.label, entry.icon, -1, 3))
 
     return rows
 
 
+def build_time_block_rows(config: AppTomlConfig) -> list[TimeBlockRow]:
+    if config.time_blocking is None:
+        return []
+
+    if not config.time_blocking.provider:
+        logger.error("[time_blocking].kind must be a non-empty string")
+        return []
+
+    try:
+        provider_kind = get_provider_kind(config, config.time_blocking.provider)
+        provider = provider_registry.create_timeblocks_provider(provider_kind)
+        logger.info(f"Starting time blocks from provider '{provider_kind}'")
+        provider_start = time.perf_counter()
+
+        rows = provider.time_blocks(
+            ProviderContext(
+                provider_name=provider_kind,
+                provider_config=config.providers[provider_kind],
+                requests=config.time_blocking.requests,
+            )
+        )
+    except Exception:
+        logger.exception(
+            f"Failed to build time blocks from provider '{config.time_blocking.provider}'"
+        )
+        return []
+
+    logger.info(
+        f"Finished time blocks from provider '{config.time_blocking.provider}'"
+        f" in {time.perf_counter() - provider_start}",
+    )
+    return rows
+
+
 def build_status_payload(config: AppTomlConfig) -> StatusFile:
-    return {"f": build_status_rows(config)}
+    return {
+        "f": build_status_rows(config),
+        "tb": build_time_block_rows(config),
+    }
 
 
 def publish_status_output(content: str, output_path: Path):
@@ -317,11 +387,11 @@ def main(argv: Sequence[str] | None = None):
 
     if args.dry_run:
         print(content, end="")
-        logger.info("Finished update_status run in %.3fs", time.perf_counter() - run_start)
+        logger.info(f"Finished update_status run in {time.perf_counter() - run_start:.3f}s")
         return 0
 
     publish_status_output(content, config.updater.output_path)
-    logger.info("Finished update_status run in %.3fs", time.perf_counter() - run_start)
+    logger.info(f"Finished update_status run in {time.perf_counter() - run_start:.3f}s")
     return 0
 
 

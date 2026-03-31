@@ -1,6 +1,16 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import ClassVar, Literal, Protocol, TypeAlias, TypedDict
+from typing import (
+    ClassVar,
+    Literal,
+    NamedTuple,
+    NotRequired,
+    Protocol,
+    TypeAlias,
+    TypedDict,
+    TypeGuard,
+    cast,
+)
 
 # ---- Renderer Types ------------------------------------------------------------------------
 
@@ -23,16 +33,42 @@ class ProviderContext:
     requests: list[TomlTable]
 
 
-class Provider(Protocol):
+class CountProvider(Protocol):
     kind: ClassVar[str]
 
     def count(self, ctx: ProviderContext) -> int: ...
 
 
+class TimeBlocksProvider(Protocol):
+    kind: ClassVar[str]
+
+    def time_blocks(self, ctx: ProviderContext) -> list["TimeBlockRow"]: ...
+
+
 # ---- Status Payload Types ------------------------------------------------------------------
 
-CountsRow: TypeAlias = tuple[str, str, int, int]
+
+class CountsRow(NamedTuple):
+    label: str
+    icon: str
+    value: int
+    severity: int
+
+
+class TimeBlockRow(NamedTuple):
+    label: str
+    due: str
+    duration: int
+    color_hex: str
 
 
 class StatusFile(TypedDict):
     f: list[CountsRow]
+    tb: NotRequired[list[TimeBlockRow]]
+
+
+def is_str_list(value: object) -> TypeGuard[list[str]]:
+    if not isinstance(value, list):
+        return False
+    value = cast(list[object], value)
+    return len(value) == 0 or all(isinstance(item, str) for item in value)

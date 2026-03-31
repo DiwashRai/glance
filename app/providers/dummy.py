@@ -53,4 +53,4 @@ class DummyProvider:
         return total
 
 
-provider_registry.register(DummyProvider)
+provider_registry.register_count_provider(DummyProvider)

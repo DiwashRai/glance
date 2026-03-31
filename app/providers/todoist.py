@@ -5,26 +5,67 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Sequence
-from typing import ClassVar, TypeAlias, TypedDict, cast
+from dataclasses import dataclass
+from typing import ClassVar, TypeAlias, cast
 
 from app.providers.registry import provider_registry
-from app.types import ProviderContext
+from app.types import ProviderContext, TimeBlockRow, is_str_list
 
 TODOIST_FILTER_URL = "https://api.todoist.com/api/v1/tasks/filter"
 DEFAULT_PAGE_SIZE = 200
 MAX_PAGES = 10
 MAX_RETRIES = 5
+DEFAULT_TIME_BLOCK_COLOR = "#58d68d"
+COLOR_LABEL_PREFIX = "color:"
 logger = logging.getLogger(__name__)
 
 
-class TodoistTask(TypedDict):
+@dataclass(frozen=True, slots=True)
+class TodoistTask:
     id: str
     priority: int
     content: str
     description: str
+    labels: list[str]
+    due: str | None
+    duration: int | None
 
 
 TodoistTasksResponse: TypeAlias = list[TodoistTask]
+
+
+def parse_todoist_due(raw: object) -> str | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise TypeError("Task due must be a JSON object")
+    raw = cast(dict[str, object], raw)
+
+    date = raw.get("date")
+
+    if not isinstance(date, str):
+        raise TypeError("Task due.date must be a string")
+
+    return date
+
+
+def parse_todoist_duration(raw: object) -> int | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise TypeError("Task duration must be a JSON object")
+    raw = cast(dict[str, object], raw)
+
+    amount = raw.get("amount")
+    unit = raw.get("unit")
+    if not isinstance(amount, int):
+        raise TypeError("Task duration.amount must be an int")
+    if not isinstance(unit, str):
+        raise TypeError("Task duration.unit must be a string")
+    if unit != "minute":
+        raise RuntimeError("unit expected to be 'minute'. API changed?")
+
+    return amount
 
 
 def parse_todoist_task(task: object) -> TodoistTask:
@@ -36,6 +77,9 @@ def parse_todoist_task(task: object) -> TodoistTask:
     priority = task.get("priority")
     content = task.get("content")
     description = task.get("description", "")
+    labels = task.get("labels", [])
+    due = task.get("due")
+    duration = task.get("duration")
 
     if not isinstance(task_id, str):
         raise TypeError("Task id must be a string")
@@ -45,12 +89,20 @@ def parse_todoist_task(task: object) -> TodoistTask:
         raise TypeError("Task content must be a string")
     if not isinstance(description, str):
         raise TypeError("Task description must be a string")
+    if not is_str_list(labels):
+        raise TypeError("Task labels must be a list of strings")
+
+    due = parse_todoist_due(due)
+    duration = parse_todoist_duration(duration)
 
     return TodoistTask(
         id=task_id,
         priority=priority,
         content=content,
         description=description,
+        labels=labels,
+        due=due,
+        duration=duration,
     )
 
 
@@ -125,8 +177,48 @@ def get_task_count(api_token: str, filter_values: Sequence[str], lang: str = "")
     task_ids: set[str] = set()
     for filter_value in filter_values:
         for task in fetch_todoist_tasks(api_token, filter_value=filter_value, lang=lang):
-            task_ids.add(task["id"])
+            task_ids.add(task.id)
     return len(task_ids)
+
+
+def get_time_block_color(labels: Sequence[str]) -> str:
+    for label in labels:
+        if not label.lower().startswith(COLOR_LABEL_PREFIX):
+            continue
+        color_value = label[len(COLOR_LABEL_PREFIX) :].strip()
+        if not color_value:
+            continue
+        return color_value if color_value.startswith("#") else f"#{color_value}"
+    return DEFAULT_TIME_BLOCK_COLOR
+
+
+def get_time_blocks(
+    api_token: str, filter_values: Sequence[str], lang: str = ""
+) -> list[TimeBlockRow]:
+    seen_task_ids: set[str] = set()
+    rows: list[TimeBlockRow] = []
+
+    for filter_value in filter_values:
+        for task in fetch_todoist_tasks(api_token, filter_value=filter_value, lang=lang):
+            if task.id in seen_task_ids:
+                continue
+            seen_task_ids.add(task.id)
+
+            if task.due is None or task.duration is None:
+                continue
+
+            rows.append(
+                TimeBlockRow(
+                    task.content,
+                    task.due,
+                    task.duration,
+                    get_time_block_color(task.labels),
+                )
+            )
+
+    rows.sort(key=lambda row: (row.due, row.duration))
+    logger.info(rows)
+    return rows
 
 
 def _parse_todoist_input(ctx: ProviderContext) -> tuple[str, list[str], str]:
@@ -162,4 +254,13 @@ class TodoistProvider:
         return get_task_count(api_token, filter_values=filter_values, lang=lang)
 
 
-provider_registry.register(TodoistProvider)
+class TodoistTimeBlockProvider:
+    kind: ClassVar[str] = "todoist"
+
+    def time_blocks(self, ctx: ProviderContext) -> list[TimeBlockRow]:
+        api_token, filter_values, lang = _parse_todoist_input(ctx)
+        return get_time_blocks(api_token, filter_values=filter_values, lang=lang)
+
+
+provider_registry.register_count_provider(TodoistProvider)
+provider_registry.register_timeblocks_provider(TodoistTimeBlockProvider)

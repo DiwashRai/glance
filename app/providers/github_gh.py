@@ -55,4 +55,4 @@ class GithubGhProvider:
         return get_gh_pr_count(_parse_github_gh_input(ctx))
 
 
-provider_registry.register(GithubGhProvider)
+provider_registry.register_count_provider(GithubGhProvider)
