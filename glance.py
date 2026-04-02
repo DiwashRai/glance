@@ -1,11 +1,13 @@
 import argparse
 import ctypes
 import json
+import math
 import os
 import sys
 import tkinter as tk
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,7 +16,14 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from app.types import CountsRow, MonitorMode, MonitorSelection, RenderMethod, StatusFile
+from app.types import (
+    CountsRow,
+    MonitorMode,
+    MonitorSelection,
+    RenderMethod,
+    StatusFile,
+    TimeBlockRow,
+)
 
 DEFAULT_CONFIG_PATH = "config.local.toml"
 ALL_CLEAR_TEXT = "✓ clear"
@@ -25,6 +34,7 @@ STATUS_FIELD_TYPE_TEXT = "Status Field Must Be A List"
 STATUS_ROW_TYPE_TEXT = "Status Row Must Have 4 Fields"
 LABEL_FG = "#e5e5e5"
 BG = "#111111"
+INACTIVE_TIME_BLOCK_COLOR = "#666666"
 COLORS = {0: "#58d68d", 1: "#f4d03f", 2: "#f39c12", 3: "#e74c3c"}
 GWL_EXSTYLE = -20
 MS_PER_SECOND = 1000
@@ -68,6 +78,18 @@ class CliArgs:
     poll: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class TimeBlockDisplay:
+    label: str
+    color: str
+    status_text: str
+    start: datetime
+    end: datetime
+    is_active: bool
+    slot_count: int = 0
+    completed_slots: int = 0
+
+
 def parse_cli_args(argv: Sequence[str] | None = None) -> CliArgs:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, type=Path)
@@ -89,7 +111,8 @@ def main():
 class GlanceApp:
     def __init__(self, config: AppConfig) -> None:
         self.config: AppConfig = config
-        self.mtime = None
+        self.status_file_mod_time = None
+        self.time_blocks: list[TimeBlockRow] = []
         self.root = tk.Tk()
         self.root.withdraw()
         monitors = select_monitor_rects(get_monitor_rects(), config.monitors)
@@ -101,11 +124,14 @@ class GlanceApp:
 
     def refresh_status(self) -> None:
         try:
-            mtime = self.config.path.stat().st_mtime
-            if self.mtime != mtime:
-                done, items = self.read_status()
-                self.update_windows(GlanceWindow.render, done, items)
-                self.mtime = mtime
+            mod_time = self.config.path.stat().st_mtime
+            if self.status_file_mod_time != mod_time:
+                done, items, self.time_blocks = self.read_status()
+                self.status_file_mod_time = mod_time
+                self.update_windows(GlanceWindow.render_counts, done, items)
+
+            time_block = get_time_block_display(self.time_blocks)
+            self.update_windows(GlanceWindow.render_time_block, time_block)
         except OSError:
             self.update_windows(GlanceWindow.render_error, INVALID_PATH_TEXT)
         except Exception as exc:
@@ -124,7 +150,7 @@ class GlanceApp:
             if window.locked:
                 window.place()
 
-    def read_status(self) -> tuple[int, list[CountsRow]]:
+    def read_status(self) -> tuple[int, list[CountsRow], list[TimeBlockRow]]:
         with self.config.path.open(encoding="utf-8") as f:
             data = cast(StatusFile, json.load(f))
 
@@ -138,9 +164,9 @@ class GlanceApp:
             if count == 0:
                 done += 1
             else:
-                rows.append((label, symbol, count, severity))
+                rows.append(CountsRow(label, symbol, count, severity))
 
-        return done, rows
+        return done, rows, list(data.get("tb", []))
 
 
 class GlanceWindow:
@@ -151,34 +177,47 @@ class GlanceWindow:
         self.locked = True
         self.drag_x = 0
         self.drag_y = 0
+
         self.root: tk.Toplevel = tk.Toplevel(app_root)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)  # pyright: ignore [reportUnknownMemberType]
         self.root.attributes("-alpha", config.alpha)  # pyright: ignore [reportUnknownMemberType]
         self.root.configure(bg=BG)
-        self.row = tk.Frame(self.root, bg=BG, padx=8, pady=4)
-        self.row.pack()
+
+        self.content = tk.Frame(self.root, bg=BG)
+        self.content.pack(padx=(8, 8), pady=(4, 4))
+
+        self.counts_row = tk.Frame(self.content, bg=BG)
+        self.counts_row.pack()
+        self.time_block_row = tk.Frame(self.content, bg=BG)  # packed only if required
+
         self.root.bind("<Button-1>", self.start_drag)
         self.root.bind("<B1-Motion>", self.drag)
         self.root.bind("<Button-3>", lambda _event: app_root.destroy())
         self.place()
+
         if config.click_through:
             self.set_click_through()
 
-    def render(self, done: int, items: Sequence[CountsRow]) -> None:
-        self.clear()
+    def render(
+        self, done: int, items: Sequence[CountsRow], time_block: TimeBlockDisplay | None
+    ) -> None:
+        self.render_counts(done, items)
+        self.render_time_block(time_block)
+
+    def render_counts(self, done: int, items: Sequence[CountsRow]) -> None:
+        self.clear_counts_row()
         if done > 0 and not items:
             self.add_label(ALL_CLEAR_TEXT, COLORS[0])
-            return
+        else:
+            ticks = "✓" * done
+            if self.config.tick_stack == "left" and ticks:
+                self.add_label(ticks, COLORS[0], padx=(0, 10))
 
-        ticks = "✓" * done
-        if self.config.tick_stack == "left" and ticks:
-            self.add_label(ticks, COLORS[0], padx=(0, 10))
+            self.render_items(items)
 
-        self.render_items(items)
-
-        if self.config.tick_stack == "right" and ticks:
-            self.add_label(ticks, COLORS[0], padx=(0, 10))
+            if self.config.tick_stack == "right" and ticks:
+                self.add_label(ticks, COLORS[0], padx=(0, 10))
 
     def render_error(self, message: str) -> None:
         self.clear()
@@ -225,26 +264,144 @@ class GlanceWindow:
         self.root.geometry(f"+{self.root.winfo_x() + dx}+{self.root.winfo_y() + dy}")
 
     def clear(self) -> None:
-        for widget in self.row.winfo_children():
+        self.clear_counts_row()
+        self.clear_time_block_row()
+
+    def clear_counts_row(self) -> None:
+        for widget in self.counts_row.winfo_children():
             widget.destroy()
+
+    def clear_time_block_row(self) -> None:
+        for widget in self.time_block_row.winfo_children():
+            widget.destroy()
+        self.time_block_row.pack_forget()
 
     def render_items(self, items: Sequence[CountsRow]) -> None:
         for _, symbol, count, severity in items:
-            cell = tk.Frame(self.row, bg=BG)
-            cell.pack(side="left", padx=(0, 8))
+            cell = tk.Frame(self.counts_row, bg=BG)
+            cell.pack(side="left")
             self.add_label(symbol, LABEL_FG, parent=cell)
-            self.add_label(str(count), COLORS[severity], parent=cell, padx=(4, 0))
+            self.add_label(str(count), COLORS[severity], parent=cell, padx=(8, 8))
+
+    def render_time_block(self, time_block: TimeBlockDisplay | None) -> None:
+        self.clear_time_block_row()
+        if time_block is None:
+            return
+
+        self.time_block_row.pack(fill="x")
+        self.add_label(
+            time_block.label,
+            time_block.color,
+            parent=self.time_block_row,
+            padx=(0, 8),
+            font=(self.config.font, 10),
+        )
+        if time_block.slot_count > 0:
+            blocks = tk.Frame(self.time_block_row, bg=BG)
+            blocks.pack(side="left", padx=(0, 8))
+
+            filled_blocks = "■" * time_block.completed_slots
+            unfilled_blocks = "■" * (time_block.slot_count - time_block.completed_slots)
+            if filled_blocks:
+                self.add_label(
+                    filled_blocks,
+                    time_block.color,
+                    parent=blocks,
+                    font=(self.config.font, 10),
+                )
+            if unfilled_blocks:
+                self.add_label(
+                    unfilled_blocks,
+                    INACTIVE_TIME_BLOCK_COLOR,
+                    parent=blocks,
+                    font=(self.config.font, 10),
+                )
+
+        self.add_label(
+            time_block.status_text,
+            time_block.color,
+            parent=self.time_block_row,
+            font=(self.config.font, 10),
+        )
 
     def add_label(
-        self, text: str, color: str, parent: tk.Misc | None = None, padx: tuple[int, int] = (0, 0)
+        self,
+        text: str,
+        color: str,
+        parent: tk.Misc | None = None,
+        padx: tuple[int, int] = (0, 0),
+        font: tuple[str, int] | None = None,
     ) -> None:
         tk.Label(
-            parent or self.row,
+            parent or self.counts_row,
             text=text,
             fg=color,
             bg=BG,
-            font=self.font,
+            font=font or self.font,
+            bd=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
         ).pack(side="left", padx=padx)
+
+
+def get_time_block_display(time_blocks: Sequence[TimeBlockRow]) -> TimeBlockDisplay | None:
+    now = datetime.now().astimezone()
+    today = now.date()
+
+    for label, due, duration, color_hex in time_blocks:
+        start = datetime.fromisoformat(due.replace("Z", "+00:00")).astimezone()
+        if start.date() != today:
+            continue
+
+        end = start + timedelta(minutes=duration)
+        if start <= now < end:
+            minutes_left = max(0, math.ceil((end - now).total_seconds() / 60))
+            slot_count, completed_slots = get_time_block_visualization_counts(start, end, now)
+            return TimeBlockDisplay(
+                label=label,
+                color=color_hex,
+                status_text=f"{format_duration_minutes(minutes_left)}",
+                slot_count=slot_count,
+                completed_slots=completed_slots,
+                start=start,
+                end=end,
+                is_active=True,
+            )
+
+        if now < start:
+            minutes_until = max(0, math.ceil((start - now).total_seconds() / 60))
+            return TimeBlockDisplay(
+                label=label,
+                color=color_hex,
+                status_text=f"→ {format_duration_minutes(minutes_until)}",
+                slot_count=0,
+                completed_slots=0,
+                start=start,
+                end=end,
+                is_active=False,
+            )
+
+    return None
+
+
+def format_duration_minutes(total_minutes: int) -> str:
+    if total_minutes < 60:
+        return f"{total_minutes}m"
+
+    hours, minutes = divmod(total_minutes, 60)
+    if minutes == 0:
+        return f"{hours}h"
+    return f"{hours}h{minutes}m"
+
+
+def get_time_block_visualization_counts(
+    start: datetime, end: datetime, now: datetime
+) -> tuple[int, int]:
+    slot_count = max(1, math.ceil((end - start).total_seconds() / (30 * 60)))
+    elapsed_seconds = max(0.0, (now - start).total_seconds())
+    completed_slots = min(int(elapsed_seconds // (30 * 60)), slot_count)
+    return slot_count, completed_slots
 
 
 def load_toml_config(config_path: Path) -> dict[str, Any]:

@@ -15,7 +15,7 @@ TODOIST_FILTER_URL = "https://api.todoist.com/api/v1/tasks/filter"
 DEFAULT_PAGE_SIZE = 200
 MAX_PAGES = 10
 MAX_RETRIES = 5
-DEFAULT_TIME_BLOCK_COLOR = "#58d68d"
+DEFAULT_TIME_BLOCK_COLOR = "white"
 COLOR_LABEL_PREFIX = "color:"
 logger = logging.getLogger(__name__)
 
@@ -188,7 +188,7 @@ def get_time_block_color(labels: Sequence[str]) -> str:
         color_value = label[len(COLOR_LABEL_PREFIX) :].strip()
         if not color_value:
             continue
-        return color_value if color_value.startswith("#") else f"#{color_value}"
+        return color_value
     return DEFAULT_TIME_BLOCK_COLOR
 
 
