@@ -4,7 +4,6 @@ from typing import (
     ClassVar,
     Literal,
     NamedTuple,
-    NotRequired,
     Protocol,
     TypeAlias,
     TypedDict,
@@ -64,7 +63,7 @@ class TimeBlockRow(NamedTuple):
 
 class StatusFile(TypedDict):
     f: list[CountsRow]
-    tb: NotRequired[list[TimeBlockRow]]
+    tb: list[TimeBlockRow]
 
 
 def is_str_list(value: object) -> TypeGuard[list[str]]:

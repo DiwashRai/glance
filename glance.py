@@ -34,7 +34,7 @@ STATUS_FIELD_TYPE_TEXT = "Status Field Must Be A List"
 STATUS_ROW_TYPE_TEXT = "Status Row Must Have 4 Fields"
 LABEL_FG = "#e5e5e5"
 BG = "#111111"
-INACTIVE_TIME_BLOCK_COLOR = "#666666"
+INACTIVE_TIME_BLOCK_COLOR = "dimgrey"
 COLORS = {0: "#58d68d", 1: "#f4d03f", 2: "#f39c12", 3: "#e74c3c"}
 GWL_EXSTYLE = -20
 MS_PER_SECOND = 1000
@@ -169,6 +169,102 @@ class GlanceApp:
         return done, rows, list(data.get("tb", []))
 
 
+class TimeBlockRowView(tk.Frame):
+    def __init__(self, parent: tk.Misc, font_name: str) -> None:
+        super().__init__(parent, bg=BG)
+        self.current_time_block: TimeBlockDisplay | None = None
+
+        self.label = tk.Label(
+            self,
+            text="",
+            fg=LABEL_FG,
+            bg=BG,
+            font=(font_name, 10),
+            bd=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
+        )
+        self.label.pack(side="left", padx=(0, 8))
+
+        self.blocks = tk.Frame(self, bg=BG)
+        self.blocks_filled = tk.Label(
+            self.blocks,
+            text="",
+            fg=LABEL_FG,
+            bg=BG,
+            font=(font_name, 10),
+            bd=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
+        )
+        self.blocks_filled.pack(side="left")
+        self.blocks_unfilled = tk.Label(
+            self.blocks,
+            text="",
+            fg=INACTIVE_TIME_BLOCK_COLOR,
+            bg=BG,
+            font=(font_name, 10),
+            bd=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
+        )
+        self.blocks_unfilled.pack(side="left")
+
+        self.status = tk.Label(
+            self,
+            text="",
+            fg=LABEL_FG,
+            bg=BG,
+            font=(font_name, 10),
+            bd=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
+        )
+        self.status.pack(side="left")
+
+    def clear(self) -> None:
+        self.label.configure(text="")
+        self.blocks_filled.configure(text="")
+        self.blocks_unfilled.configure(text="")
+        self.status.configure(text="")
+        self.blocks.pack_forget()
+        self.pack_forget()
+        self.current_time_block = None
+
+    def render(self, time_block: TimeBlockDisplay | None) -> None:
+        if time_block == self.current_time_block:
+            return
+
+        if time_block is None:
+            self.clear()
+            return
+
+        if not self.winfo_manager():
+            self.pack(fill="x")
+
+        self.label.configure(text=time_block.label, fg=time_block.color)
+        self.status.configure(text=time_block.status_text, fg=time_block.color)
+
+        if time_block.slot_count > 0:
+            if not self.blocks.winfo_manager():
+                self.blocks.pack(side="left", padx=(0, 8), before=self.status)
+
+            filled_blocks = "■" * time_block.completed_slots
+            unfilled_blocks = "■" * (time_block.slot_count - time_block.completed_slots)
+            self.blocks_filled.configure(text=filled_blocks, fg=time_block.color)
+            self.blocks_unfilled.configure(text=unfilled_blocks, fg=INACTIVE_TIME_BLOCK_COLOR)
+        else:
+            self.blocks_filled.configure(text="")
+            self.blocks_unfilled.configure(text="")
+            self.blocks.pack_forget()
+
+        self.current_time_block = time_block
+
+
 class GlanceWindow:
     def __init__(self, app_root: tk.Tk, config: AppConfig, monitor: MonitorRect) -> None:
         self.config = config
@@ -189,7 +285,7 @@ class GlanceWindow:
 
         self.counts_row = tk.Frame(self.content, bg=BG)
         self.counts_row.pack()
-        self.time_block_row = tk.Frame(self.content, bg=BG)  # packed only if required
+        self.time_block_row = TimeBlockRowView(self.content, config.font)
 
         self.root.bind("<Button-1>", self.start_drag)
         self.root.bind("<B1-Motion>", self.drag)
@@ -272,9 +368,7 @@ class GlanceWindow:
             widget.destroy()
 
     def clear_time_block_row(self) -> None:
-        for widget in self.time_block_row.winfo_children():
-            widget.destroy()
-        self.time_block_row.pack_forget()
+        self.time_block_row.clear()
 
     def render_items(self, items: Sequence[CountsRow]) -> None:
         for _, symbol, count, severity in items:
@@ -284,45 +378,7 @@ class GlanceWindow:
             self.add_label(str(count), COLORS[severity], parent=cell, padx=(8, 8))
 
     def render_time_block(self, time_block: TimeBlockDisplay | None) -> None:
-        self.clear_time_block_row()
-        if time_block is None:
-            return
-
-        self.time_block_row.pack(fill="x")
-        self.add_label(
-            time_block.label,
-            time_block.color,
-            parent=self.time_block_row,
-            padx=(0, 8),
-            font=(self.config.font, 10),
-        )
-        if time_block.slot_count > 0:
-            blocks = tk.Frame(self.time_block_row, bg=BG)
-            blocks.pack(side="left", padx=(0, 8))
-
-            filled_blocks = "■" * time_block.completed_slots
-            unfilled_blocks = "■" * (time_block.slot_count - time_block.completed_slots)
-            if filled_blocks:
-                self.add_label(
-                    filled_blocks,
-                    time_block.color,
-                    parent=blocks,
-                    font=(self.config.font, 10),
-                )
-            if unfilled_blocks:
-                self.add_label(
-                    unfilled_blocks,
-                    INACTIVE_TIME_BLOCK_COLOR,
-                    parent=blocks,
-                    font=(self.config.font, 10),
-                )
-
-        self.add_label(
-            time_block.status_text,
-            time_block.color,
-            parent=self.time_block_row,
-            font=(self.config.font, 10),
-        )
+        self.time_block_row.render(time_block)
 
     def add_label(
         self,
