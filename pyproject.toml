@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 keywords = ["notifications", "statusbar", "desktop", "tkinter"]
 dependencies = [
     "msgspec>=0.22.0",
+    "pyside6-essentials>=6.12.0",
     'tomli; python_version < "3.11"',
 ]
 
@@ -22,7 +23,7 @@ glance-renderer = "glance:main"
 glance-collector = "update_status:main"
 
 [tool.setuptools]
-py-modules = ["glance", "update_status"]
+py-modules = ["glance", "glance_v2", "update_status"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
@@ -128,8 +129,12 @@ name = "No import cycles"
 type = "acyclic_siblings"
 ancestors = ["app"]
 
-# Add the same contract for app.store and app.ui once they exist: import-linter rejects modules
-# that aren't there yet.
+[[tool.importlinter.contracts]]
+name = "The store is only used by the controller and the app that builds it"
+type = "protected"
+protected_modules = ["app.store"]
+allowed_importers = ["app.controller", "app.ui.app"]
+
 [[tool.importlinter.contracts]]
 name = "Providers are only imported by the provider package"
 type = "protected"
