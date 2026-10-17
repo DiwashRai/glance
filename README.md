@@ -17,7 +17,8 @@ Glance has two parts:
   (unread mail, reviews, tickets), coloured by how urgent it is. A green ✓ when all is clear.
   Click it to open the overlay.
 - **The overlay:** press Ctrl+Space anywhere to open it, type a command, Enter to run it, Esc to
-  hide it. Glance lives in the tray; right-click the orange dot to quit.
+  hide it. Hold Ctrl+Space instead to peek: it shows while you hold, without taking the focus,
+  and hides when you let go. Glance lives in the tray; right-click the orange dot to quit.
 
 | Command | Does |
 |---|---|

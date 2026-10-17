@@ -118,7 +118,7 @@ Keys in the overlay and on drop cards:
 
 | Key | Does |
 |---|---|
-| Ctrl+Space | Tap: open the overlay to type. Hold: peek, and it hides on release. |
+| Ctrl+Space | Tap: open the overlay to type. Hold (300 ms or more): peek without taking the focus, and it hides on release. |
 | ↵ | Run the command. On an empty text box: accept the suggestion shown. |
 | Esc | Close or dismiss |
 | `b` | Break the selected task into steps |

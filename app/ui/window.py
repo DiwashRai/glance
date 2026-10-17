@@ -1,21 +1,24 @@
 """The overlay, laid out as board F: Focus above Parked on the left; Active, the prompt, the
 message line and the key hints in the middle; Quick on the right, where Today joins it later.
 
-Ctrl+Space toggles it. Esc, or clicking anywhere else, hides it. It only talks to the
-controller.
+Ctrl+Space opens it to type; held, it's a peek that hides when the keys are let go. Ctrl+Space
+again, Esc, or clicking anywhere else, hides it. It only talks to the controller.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QSize, Qt
-from PySide6.QtGui import QCursor, QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer
+from PySide6.QtGui import QCursor, QGuiApplication, QHideEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from app.controller import Controller, View
 from app.ui import parts, theme
 from app.ui.theme import styled
+from app.win32.hotkey import held
 
 SIZE = QSize(1380, 480)  # board F's proportions
+PEEK_MS = 300  # Ctrl+Space held this long is a peek, not a tap
+WATCH_MS = 20  # how often the keys are checked while they're down
 
 
 class Window(QWidget):
@@ -29,6 +32,7 @@ class Window(QWidget):
             | Qt.WindowType.Tool  # no taskbar button
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)  # for the rounded panel
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)  # a peek leaves the focus
         self.setStyleSheet(theme.STYLESHEET)
 
         self.focus = parts.FocusCard()
@@ -40,6 +44,12 @@ class Window(QWidget):
         self.input = self.prompt.input
         self._lay_out(parts.hints(controller.words))
 
+        self.held_for = QElapsedTimer()
+        self.peeking = False  # the keys were seen down at PEEK_MS
+        self.focusing = False  # asked Windows for the focus, not granted yet
+        self.watch = QTimer(self)
+        self.watch.setInterval(WATCH_MS)
+        self.watch.timeout.connect(self._watch_keys)
         self.input.returnPressed.connect(self.run)
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.hide)
 
@@ -65,32 +75,70 @@ class Window(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(panel)
 
-    def toggle(self) -> None:
-        """Hide it if I'm using it; otherwise (hidden, or showing an error behind other
-        windows) bring it up."""
-        if self.isActiveWindow():
+    def pressed(self) -> None:
+        """Ctrl+Space. If I'm using it, or the last press hasn't settled (still watched, or its
+        focus not yet granted: a quick second tap), it hides. Otherwise it shows straight away,
+        without the focus, and the keys decide: let go within PEEK_MS and it takes the focus,
+        ready to type; still down at PEEK_MS and it's a peek, gone when they're let go."""
+        if self.isActiveWindow() or self.watch.isActive() or self.focusing:
+            self.hide()
+            return
+        self.peeking = False
+        self.held_for.start()
+        self._appear()
+        self.watch.start()
+
+    def _watch_keys(self) -> None:
+        """A peek only if the keys were seen still down at PEEK_MS, so a slow first show can't
+        turn a tap into one."""
+        if held():
+            self.peeking = self.held_for.elapsed() >= PEEK_MS
+            return
+        self.watch.stop()
+        if self.peeking:
             self.hide()
         else:
-            self.open()
+            self._take_focus()
 
     def open(self) -> None:
+        """Show it, ready to type: from the tray icon or the HUD. It takes over from a peek."""
+        self.watch.stop()
+        self._appear()
+        self._take_focus()
+
+    def _appear(self) -> None:
         """Re-read the lists, then show it in the middle of the screen under the mouse, in front,
-        ready to type."""
+        without taking the focus."""
         self.draw(self.controller.open())
         area = (QGuiApplication.screenAt(QCursor.pos()) or self.screen()).availableGeometry()
         self.setFixedSize(SIZE.boundedTo(area.size()))  # never jumps; smaller on a small screen
         self.move(area.center() - self.rect().center())
         self.show()
         self.raise_()
+
+    def _take_focus(self) -> None:
+        self.focusing = True  # until Windows grants it, or the window hides
         self.activateWindow()
         self.input.setFocus()
         self.input.selectAll()  # leftover text is selected, so typing replaces it
 
     def changeEvent(self, event: QEvent) -> None:
-        """Clicking anywhere else hides it, like a menu."""
+        """Clicking anywhere else hides it, like a menu. Clicking into a peek keeps it open: the
+        keys no longer decide."""
         super().changeEvent(event)
-        if event.type() == QEvent.Type.ActivationChange and not self.isActiveWindow():
+        if event.type() != QEvent.Type.ActivationChange:
+            return
+        if self.isActiveWindow():
+            self.watch.stop()
+            self.focusing = False
+        else:
             self.hide()
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """However it hides, the last press is over."""
+        super().hideEvent(event)
+        self.watch.stop()
+        self.focusing = False
 
     def run(self) -> None:
         view = self.controller.run(self.input.text())
@@ -111,6 +159,7 @@ class Window(QWidget):
         shows the window if it was hidden. It doesn't re-read tasks.md, so it can't fail again."""
         self.draw(View(self.controller.lists))
         self._say(f"error: {message}", "error")
+        self.watch.stop()  # an error turns a peek into a window that stays
         self.show()
 
     def _say(self, text: str, tone: str) -> None:
