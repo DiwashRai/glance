@@ -1,4 +1,5 @@
-"""Starts glance: settings, the single-instance lock, the error hook, the store and the window."""
+"""Starts glance: settings, the single-instance lock, the error hook, the store, then the shell
+(the window, the tray icon and Ctrl+Space)."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from app.config import load_settings
 from app.controller import Controller
 from app.store import Store
 from app.ui.errors import ErrorHook
-from app.ui.window import Window
+from app.ui.shell import Shell
 
 
 class AlreadyRunning(RuntimeError):
@@ -37,9 +38,11 @@ def run(app: QApplication, home: Path, argv: list[str]) -> int:
         raise AlreadyRunning("glance is already running")
     hook.log_to(settings.data_folder / "glance.log")
 
-    window = Window(Controller(Store(settings.data_folder), settings.words, _now))
-    window.show()
-    hook.show = window.show_error
+    shell = Shell(app, Controller(Store(settings.data_folder), settings.words, _now))
+    shell.start()
+    # Only now do errors go to the window: one during start-up (Ctrl+Space taken, say) must
+    # reach the message box, not a hidden window.
+    hook.show = shell.window.show_error
 
     code = app.exec()
     lock.unlock()

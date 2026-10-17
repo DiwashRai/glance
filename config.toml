@@ -1,16 +1,16 @@
 
+# glance v2. Every key has a default, so this table can stay empty.
 [glance]
-path = "data/status.local.json"
-poll = 5
-pos = "TR"
-x_offset = 20
-y_offset = 20
-alpha = 0.7
-tick_stack = "left"
-click_through = false
-font = "JetBrainsMono NF"
-font_size = 12
-monitors = "all"
+# data_folder = ""          # empty: %LOCALAPPDATA%\glance (tasks.md, events.log, glance.log)
+
+# [glance.commands]         # the words that start each command
+# new = ["new", "+"]
+# park = ["park", "pause", "shelve", "defer"]
+# wait = ["wait"]
+# switch = ["switch", "s"]
+# done = ["done", "d"]
+
+# Where the counts come from. update_status.py reads these; the v2 HUD will show the counts.
 
 [updater]
 output_path = "data/status.local.json"
