@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import ClassVar, cast
 
 from app.providers.registry import provider_registry
-from app.types import ProviderContext
+from app.types import ProviderContext, TomlTable
 from app.utils import run_no_window
 
 _UNREAD_COUNT_CACHE: dict[str, dict[str, int]] = {}
@@ -102,6 +102,19 @@ def get_unread_email_count(
     return total
 
 
+def _request_folders(request: TomlTable) -> list[int | str]:
+    folders = request.get("folders")
+    if not isinstance(folders, list) or not folders:
+        raise ValueError("Outlook requests require a non-empty 'folders' list")
+
+    folder_list: list[int | str] = []
+    for folder in folders:
+        if not isinstance(folder, str) or not folder:
+            raise ValueError("Outlook folder list items must be non-empty strings")
+        folder_list.append(int(folder) if folder.isdigit() else folder)
+    return folder_list
+
+
 def _parse_outlook_input(ctx: ProviderContext) -> tuple[list[int | str], str]:
     outlook_store = ctx.provider_config.get("outlook_store")
     if not isinstance(outlook_store, str) or not outlook_store:
@@ -111,20 +124,7 @@ def _parse_outlook_input(ctx: ProviderContext) -> tuple[list[int | str], str]:
         )
     outlook_store = outlook_store.lower()
 
-    folder_list: list[int | str] = []
-    for request in ctx.requests:
-        folders = request.get("folders")
-        if not isinstance(folders, list) or not folders:
-            raise ValueError("Outlook requests require a non-empty 'folders' list")
-
-        for folder in folders:
-            if not isinstance(folder, str) or not folder:
-                raise ValueError("Outlook folder list items must be non-empty strings")
-            if folder.isdigit():
-                folder_list.append(int(folder))
-            else:
-                folder_list.append(folder)
-
+    folder_list = [folder for request in ctx.requests for folder in _request_folders(request)]
     if not folder_list:
         raise ValueError("Outlook requests require at least one folder in 'folders'")
 

@@ -73,11 +73,9 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 # The clock ban applies to app/core only.
 "!app/core/**" = ["TID251"]
-# Entry points: the one place a broad except or print is allowed. The rest are legacy lines, to
-# fix in stage 1: glance.py S110, update_status.py TRY400, todoist.py ARG001.
-"glance.py" = ["BLE001", "T201", "S110"]
-"update_status.py" = ["BLE001", "T201", "TRY400"]
-"app/providers/todoist.py" = ["ARG001"]
+# Entry points: the one place a broad except or print is allowed.
+"glance.py" = ["BLE001", "T201"]
+"update_status.py" = ["BLE001", "T201"]
 "scripts/*.py" = ["T201"]
 "tests/*.py" = ["ARG"]
 

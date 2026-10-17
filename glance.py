@@ -201,16 +201,13 @@ class GlanceWindow:
     def set_click_through(self) -> None:
         if os.name != "nt":
             return
-        try:
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
-            ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            ctypes.windll.user32.SetWindowLongW(
-                hwnd,
-                GWL_EXSTYLE,
-                ex_style | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-            )
-        except Exception:
-            pass
+        hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+        ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        ctypes.windll.user32.SetWindowLongW(
+            hwnd,
+            GWL_EXSTYLE,
+            ex_style | WS_EX_LAYERED | WS_EX_TRANSPARENT,
+        )
 
     def start_drag(self, event: tk.Event) -> None:
         self.drag_x = event.x_root
