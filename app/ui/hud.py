@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
-from app.core.model import HudSettings, Idle, Lists, Task, working
+from app.core.model import HudSettings, Idle, Lists, Task, step_line, working
 from app.counts import Count, CountsFile
 from app.ui import icons, theme
 from app.win32.taskbar import NoTaskbar, Tray, find_tray, full_screen_app, lift, light_taskbar
@@ -167,9 +167,11 @@ class _Style:
 
 
 def _active_title(active: Task | Idle) -> str:
+    """The title, or for a task with steps the step it's on ("rerun CI · 2/4"): the HUD has
+    little room, and the step is what to do now."""
     match active:
-        case Task(title=title):
-            return title
+        case Task() as task:
+            return step_line(task) or task.title
         case Idle():
             return ""
 

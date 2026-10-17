@@ -81,11 +81,15 @@ says so.
 ## Steps
 
 - A task can have steps: an ordered checklist, one level only (no steps inside steps).
-- One step is the current step. The Active card and the HUD show it with progress:
-  `1135 › compare node versions · step 2/4`.
-- `done` ticks off the current step and moves to the next. On the last step it asks "finish 1135?".
-  If some steps were skipped, it asks "2 skipped: finish anyway, or go back?".
-- `skip` (or `>`) moves past a blocked step and leaves it in the list.
+- One step is the current step. The Active card shows it with progress (`compare node versions ·
+  2/4`); the HUD shows the step and its progress in place of the title, since it has little room. A parked task with no note shows
+  its step instead.
+- `done` ticks off the current step and moves to the next. After the last step it says "all 4
+  steps done · done again to finish", so finishing takes a second `done`.
+- `skip` (or `>`) moves past a blocked step and leaves it in the list. Once the open steps run out,
+  glance comes back round to the skipped ones. Skipping one again leaves it for good, and when only
+  those are left, `done` finishes anyway and says how many were skipped.
+- `finish` finishes the task early, whatever its steps.
 - A step that turns out to be big becomes its own task.
 - Parking keeps my place, so the step itself works as the "left off" note.
 - Steps come from typing (`step rerun CI with trace`), from the breakdown helper, or optionally from
@@ -103,7 +107,8 @@ Typed into the overlay's text box. The first word decides; anything else goes to
 | `switch <name>` (or `s`) | Make a parked task active; the current one is parked |
 | `new <title>` (or `+`) | Start a new task; the current one is parked |
 | `done` (or `d`) | Finish the current step, or the task if it has no steps. `done q2` ticks off a Quick item without starting it |
-| `skip` (or `>`) | Skip the current step |
+| `skip` (or `>`) | Skip the current step; skipped steps come back round once |
+| `finish` | Finish the active task now, whatever its steps |
 | `step <text>` | Add a step |
 | `quick <text>` (or `q`) | Add a Quick item, with an optional size at the end (`~3m`, `~1h`). Switching to one (`s q2`) and parking it puts it back in Quick; parking it with a note or as waiting makes it a parked task |
 | `focus <text>` | Add to Focus, if a slot is free |
