@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.model import Idle, LeftOff, Lists, ParkedTask, Task, Waiting
+from app.core.model import FromQuick, Idle, LeftOff, Lists, ParkedTask, Task, Waiting
 from app.core.tasks_md import Problem, parse, render
 
 EXAMPLE = """\
@@ -16,7 +16,12 @@ EXAMPLE = """\
   waiting on: review
 - Tidy logging config
   left off: half done on chore/logging
-- 1087 onboarding docs
+- 1087 onboarding docs ~2h
+
+# Quick
+- merge 1129 ~3m
+- review #415 ~90m
+- reply to Sam
 """
 
 LISTS = Lists(
@@ -24,9 +29,14 @@ LISTS = Lists(
     (
         ParkedTask(Task("1129 password reset flow"), Waiting("review")),
         ParkedTask(Task("Tidy logging config"), LeftOff("half done on chore/logging")),
-        ParkedTask(Task("1087 onboarding docs"), LeftOff()),
+        ParkedTask(Task("1087 onboarding docs", 120), LeftOff()),
     ),
     ("Fix the vulnerabilities", "Migrate the build to uv"),
+    (
+        Task("merge 1129", 3),
+        Task("review #415", 90),
+        Task("reply to Sam"),
+    ),
 )
 ODD = f"a{chr(0x2028)}b{chr(0x0C)}c"  # characters str.splitlines() would split on
 
@@ -35,8 +45,12 @@ ODD = f"a{chr(0x2028)}b{chr(0x0C)}c"  # characters str.splitlines() would split 
     ("text", "lists"),
     [
         (EXAMPLE, LISTS),
-        ("# Active\n\n# Focus\n\n# Parked\n", Lists()),
-        (f"# Active\n- {ODD}\n\n# Focus\n\n# Parked\n", Lists(Task(ODD), ())),
+        ("# Active\n\n# Focus\n\n# Parked\n\n# Quick\n", Lists()),
+        (f"# Active\n- {ODD}\n\n# Focus\n\n# Parked\n\n# Quick\n", Lists(Task(ODD), ())),
+        (
+            "# Active\n- reply ~5m\n  home: quick\n\n# Focus\n\n# Parked\n\n# Quick\n",
+            Lists(FromQuick(Task("reply", 5))),
+        ),
     ],
 )
 def test_round_trips_exactly(text: str, lists: Lists) -> None:
@@ -71,7 +85,9 @@ def test_reads_hand_edits_leniently(text: str, lists: Lists) -> None:
         ("# Active\n# Later\n", 2, "unknown heading '# Later'"),
         ("# Active\n# Active\n", 2, "'# Active' appears twice"),
         ("# Active\n- a\n- b\n", 3, "only one task can be active"),
-        ("# Active\n- a\n  left off: x\n", 3, "the active task can't have a note"),
+        ("# Active\n- a\n  left off: x\n", 3, "the active task can only have 'home: quick'"),
+        ("# Quick\n- a\n  left off: x\n", 3, "a quick item can't have a note"),
+        ("# Quick\n- ~5m\n", 2, "a task needs a title"),
         ("# Parked\n  left off: x\n", 2, "a note goes on its own line under a parked task"),
         ("# Parked\n- a\n  something else\n", 3, "a note starts with 'waiting on:'"),
         ("# Parked\n- a\n  waiting on:\n", 3, "waiting on what?"),

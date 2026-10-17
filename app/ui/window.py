@@ -1,5 +1,5 @@
 """The overlay, laid out as board F: Focus above Parked on the left; Active, the prompt, the
-message line and the key hints in the middle. The time side (Today, Quick) comes later.
+message line and the key hints in the middle; Quick on the right, where Today joins it later.
 
 Ctrl+Space toggles it. Esc, or clicking anywhere else, hides it. It only talks to the
 controller.
@@ -15,7 +15,7 @@ from app.controller import Controller, View
 from app.ui import parts, theme
 from app.ui.theme import styled
 
-SIZE = QSize(1040, 480)  # board F's proportions, without the time column
+SIZE = QSize(1380, 480)  # board F's proportions
 
 
 class Window(QWidget):
@@ -32,7 +32,8 @@ class Window(QWidget):
         self.setStyleSheet(theme.STYLESHEET)
 
         self.focus = parts.FocusCard()
-        self.parked = parts.ParkedCard()
+        self.parked = parts.parked_card()
+        self.quick = parts.quick_card()
         self.active = parts.ActiveCard()
         self.prompt = parts.Prompt()
         self.message = parts.message_line()
@@ -59,6 +60,7 @@ class Window(QWidget):
         left.addWidget(self.parked, stretch=1)
         columns.addLayout(left)
         columns.addLayout(middle, stretch=1)
+        columns.addWidget(self.quick)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(panel)
@@ -100,7 +102,8 @@ class Window(QWidget):
     def draw(self, view: View) -> None:
         self.active.show_active(view.lists.active)
         self.focus.show_focus(view.lists.focus)
-        self.parked.show_parked(view.lists.parked)
+        parts.show_parked(self.parked, view.lists.parked)
+        parts.show_quick(self.quick, view.lists.quick)
         self._say(view.problem or view.message, _tone(view))
 
     def show_error(self, message: str) -> None:

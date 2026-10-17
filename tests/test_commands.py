@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -9,6 +10,7 @@ from app.core.commands import (
     Focus,
     New,
     Park,
+    Quick,
     Rejected,
     Switch,
     Unfocus,
@@ -17,7 +19,17 @@ from app.core.commands import (
     apply,
     parse_command,
 )
-from app.core.model import CommandWords, Event, Idle, LeftOff, Lists, ParkedTask, Task, Waiting
+from app.core.model import (
+    CommandWords,
+    Event,
+    FromQuick,
+    Idle,
+    LeftOff,
+    Lists,
+    ParkedTask,
+    Task,
+    Waiting,
+)
 from app.core.tasks_md import parse, render
 
 NOW = datetime(2026, 10, 17, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
@@ -55,6 +67,8 @@ def applied(lists: Lists, text: str) -> Applied:
         ("new\tfix  the   build ", New("fix the build")),
         ("Focus fix the vulnerabilities", Focus("fix the vulnerabilities")),
         ("unfocus 2", Unfocus("2")),
+        ("q merge 1129 ~3m", Quick("merge 1129 ~3m")),
+        ("done q2", Done("q2")),
         ("hello there", Unknown("hello")),
         ("   ", Unknown("")),
     ],
@@ -204,11 +218,20 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "new", "new needs a title"),
         (DAY, "wait", "wait on what?"),
         (DAY, "switch", "switch to what?"),
-        (DAY, "s nope", "no parked task matches 'nope'"),
-        (DAY, "s ²", "no parked task matches '²'"),
-        (DAY, f"s {'9' * 5000}", f"no parked task matches '{'9' * 5000}'"),
+        (DAY, "s nope", "no task matches 'nope'"),
+        (DAY, "s ²", "no task matches '²'"),
+        (
+            DAY,
+            f"s {'9' * 5000}",
+            f"no parked task matches '{'9' * 5000}' (quick items: s q<number>)",
+        ),
+        (DAY, "s q0000001", "there's no q0000001 in quick"),
+        (DAY, "quick ~5m", "quick what? for example: quick merge 1129 ~3m"),
         (TWINS, "s same", "'same' matches 2: 1 same, 2 same"),
-        (DAY, "done 1129", "done finishes the active task: type just done"),
+        (DAY, "done 1129", "done finishes the active task; done q<number> ticks off a quick item"),
+        (DAY, "done q1", "there's no q1 in quick"),
+        (DAY, "s q1", "there's no q1 in quick"),
+        (DAY, "quick", "quick what? for example: quick merge 1129 ~3m"),
         (DAY, "focus", "focus on what?"),
         (FOCUSED, "focus a third", "focus is full: unfocus one first, by number or name"),
         (FOCUSED, "focus Migrate the build", "already focusing on Migrate the build"),
@@ -219,3 +242,60 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
 )
 def test_rejections_say_why_and_change_nothing(lists: Lists, text: str, reason: str) -> None:
     assert run(lists, text) == Rejected(reason)
+
+
+MERGE = Task("merge 1129", 3)
+REPLY = Task("reply to Sam")
+QUICK_DAY = Lists(ACTIVE, (WAITING, LEFT), quick=(MERGE, REPLY))
+
+
+def test_quick_adds_smallest_first_with_unsized_last() -> None:
+    result = applied(QUICK_DAY, "quick review #415 ~1h")
+    assert result.lists.quick == (MERGE, Task("review #415", 60), REPLY)
+    assert result.events == (Event(NOW, "added", "review #415", "~1h"),)
+    assert result.message == "added review #415 ~1h to quick"
+
+
+def test_done_ticks_off_a_quick_item_without_making_it_active() -> None:
+    result = applied(QUICK_DAY, "done q1")
+    assert result.lists == replace(QUICK_DAY, quick=(REPLY,))
+    assert result.events == (Event(NOW, "finished", "merge 1129"),)
+
+
+def test_a_quick_item_switched_to_goes_back_to_quick_unless_it_gains_a_note() -> None:
+    picked = applied(QUICK_DAY, "s q2")
+    assert picked.lists.active == FromQuick(REPLY)
+    assert picked.lists.quick == (MERGE,)
+    back = applied(picked.lists, "park")
+    assert back.lists.quick == (MERGE, REPLY)
+    assert back.message == "put reply to Sam back in quick"
+    noted = applied(picked.lists, "wait Sam's answer")
+    assert noted.lists.parked[0] == ParkedTask(Task("reply to Sam"), Waiting("Sam's answer"))
+    assert applied(picked.lists, "new x").message == "started x · put reply to Sam back in quick"
+
+
+ROADMAP = Task("review Q2 roadmap", 3)
+
+
+@pytest.mark.parametrize(
+    ("lists", "text", "active"),
+    [
+        # q2 is always Quick row 2, even when another title has "q2" in it
+        (Lists(quick=(ROADMAP, REPLY)), "s q2", FromQuick(REPLY)),
+        (
+            Lists(parked=(ParkedTask(ROADMAP, LeftOff()),), quick=(MERGE, REPLY)),
+            "s Q2",
+            FromQuick(REPLY),
+        ),
+        # a number only looks at Parked, whose rows are numbered
+        (Lists(parked=(LEFT, WAITING), quick=(Task("merge 2"),)), "s 2", WAITING.task),
+    ],
+)
+def test_switch_picks_the_row_the_card_shows(
+    lists: Lists, text: str, active: Task | FromQuick
+) -> None:
+    assert applied(lists, text).lists.active == active
+
+
+def test_done_q2_ticks_row_2_even_when_another_title_says_q2() -> None:
+    assert applied(Lists(quick=(ROADMAP, REPLY)), "done q2").lists.quick == (ROADMAP,)

@@ -38,6 +38,7 @@ class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     done: Words = DEFAULT_WORDS.done
     focus: Words = DEFAULT_WORDS.focus
     unfocus: Words = DEFAULT_WORDS.unfocus
+    quick: Words = DEFAULT_WORDS.quick
 
     def groups(self) -> dict[str, tuple[str, ...]]:
         """Each command's words, lower-cased."""
