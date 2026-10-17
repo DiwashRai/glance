@@ -3,18 +3,21 @@
 
 ## summary
 
-A quick and dirty way to have a select few important notifications always visible e.g. emails,
-code reviews, jira. This is so that you can remain deeply focused on the current task, whilst being
-able to *glance* at what else might be waiting on you without having to context switch to email
-clients, browsers etc.
+A way to stay deeply focused on one task while still being able to *glance* at what else is
+waiting on you (emails, code reviews, Jira), without context switching to email clients,
+browsers and so on. `docs/vision.md` says where it's going.
 
-Instructions are for windows at the moment.
+Instructions are for Windows at the moment.
 
-## Glance v2 (in progress)
+## Using it
 
-v2 is a task overlay: press Ctrl+Space anywhere to open it, type a command, Enter to run it, Esc
-to hide it. It lives in the tray; right-click the orange dot to quit. `docs/vision.md` says where
-it's going.
+Glance has two parts:
+
+- **The HUD:** one row on the taskbar, just left of the tray. The active task, then each count
+  (unread mail, reviews, tickets), coloured by how urgent it is. A green ✓ when all is clear.
+  Click it to open the overlay.
+- **The overlay:** press Ctrl+Space anywhere to open it, type a command, Enter to run it, Esc to
+  hide it. Glance lives in the tray; right-click the orange dot to quit.
 
 | Command | Does |
 |---|---|
@@ -25,50 +28,38 @@ it's going.
 | `done` (or `d`) | Finish the active task |
 
 Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
-what happened is logged to `events.log` next to it. Settings go under `[glance]` in
-`config.local.toml` (see `config.toml` for the defaults).
+what happened is logged to `events.log` next to it.
 
-v2 takes over the `[glance]` table from the v1 bar, so the v1 bar no longer runs with this
-config. If your `config.local.toml` still has v1's keys there (`path`, `poll`, `pos` and so on),
-glance stops with "unknown field": back the file up, then delete those keys. Keep `[updater]`,
-`[providers]` and `[[entries]]`: they're where the counts come from.
+## Setting it up
 
-To start it at login, add a Task Scheduler task that runs `scripts\run_glance_v2.cmd` on logon,
-with "Run only when user is logged on" (as below for v1). The script needs
-[uv](https://docs.astral.sh/uv/): it installs or updates glance's dependencies before starting
-it. glance refuses to run a second copy, so starting it twice is harmless.
-
-## Usage (v1)
-The repo is set up so you can keep tracked defaults in `config.toml` and personal settings in
-`config.local.toml`. The local file is ignored, so your tokens, folder selections, and status
-file path do not block `git pull`.
-
-The quickest way to get started is:
+You need [uv](https://docs.astral.sh/uv/). Then:
 
 ```bat
 scripts\run_glance.cmd
 ```
 
-On first run that script will:
-- copy `config.toml` to `config.local.toml` if needed
-- copy `data\status.json` to `data\status.local.json` if needed
-- start the renderer using `config.local.toml`
+It installs or updates glance's dependencies, collects the counts once, and starts glance.
+glance refuses to run a second copy, so starting it twice is harmless.
 
-To refresh counts with the same local config:
+**Settings.** Keep tracked defaults in `config.toml` and your own settings in
+`config.local.toml`, which git ignores, so your tokens don't block `git pull`. Glance and the
+collector use `config.local.toml` if it exists, else `config.toml`.
 
-```bat
-scripts\update_status.cmd
-```
+- `[glance]`: glance's own settings, all optional (see `config.toml`).
+- `[updater]`, `[providers]` and `[[entries]]`: where the counts come from. Each entry's `icon`
+  can be `mail`, `todo`, `jira` or `pr` for an outline icon, or any text, such as a Nerd Font
+  glyph.
 
-If you prefer to run the Python entry points directly, they now look for `config.local.toml`
-first and fall back to `config.toml`.
+**The counts.** `update_status.py` (the collector) asks each provider for its count and writes
+them to `[updater].output_path`, which the HUD reads. It runs once and exits, so schedule
+`scripts\update_status.vbs` (it runs `update_status.cmd` with no window) to keep the counts
+fresh. Run `scripts\update_status.cmd --dry-run` to see what it would write.
 
-```bat
-pythonw.exe "C:\path\to\glance.py" --config "C:\path\to\config.local.toml"
-python.exe "C:\path\to\update_status.py" --config "C:\path\to\config.local.toml"
-```
-Use python.exe and not pythonw.exe if you are making sure that it's starting up and running fine
-otherwise you have to kill the process from task manager or using taskkill.
+**Start at login,** with Task Scheduler:
+- Create a task that triggers on logon. Add a delay if you want.
+- General: set "Run only when user is logged on".
+- Action: start a program, `C:\Path\to\glance\scripts\run_glance.cmd`.
+- Settings: if the task is already running, "Do not start a new instance".
 
 ## Development
 
@@ -83,16 +74,3 @@ just fix     :: auto-fix lint issues and format
 ```
 
 `AGENTS.md` explains the gates and the code style they enforce.
-
-### With Task Scheduler:
-- Create a task that triggers on logon. Add a delay if you want.
-- General: Set 'Run only when user is logged on'
-- Action should be: Start a program `C:\Path\to\glance\scripts\run_glance.cmd`
-- Settings: If the task is already running the the following rule applies:
-  - 'Do not start a new instance'
-
-## Design
-- Always on top visibility without being obtrusive
-- Read from some sort of status.json that a different background scrip/task will generate
-  - simple format that has name, symbol, count/value and severity
-  - fast to parse for potential use in a powershell prompt

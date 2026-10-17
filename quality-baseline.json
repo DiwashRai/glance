@@ -6,7 +6,6 @@
     ],
     "handlers": [
       "glance.py",
-      "glance_v2.py",
       "update_status.py"
     ],
     "ui": [
@@ -36,13 +35,13 @@
       "suppressions": 0
     },
     "handlers": {
-      "is_none": 3,
-      "optional_sig": 4,
-      "isinstance": 18,
-      "try": 3,
+      "is_none": 0,
+      "optional_sig": 2,
+      "isinstance": 16,
+      "try": 1,
       "try_allowed": 0,
-      "broad_except": 3,
-      "suppressions": 6
+      "broad_except": 1,
+      "suppressions": 2
     },
     "ui": {
       "is_none": 0,

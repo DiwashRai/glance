@@ -1,12 +1,6 @@
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import ClassVar, Literal, Protocol, TypeAlias, TypedDict
-
-# ---- Renderer Types ------------------------------------------------------------------------
-
-MonitorMode: TypeAlias = Literal["all", "primary"]
-MonitorSelection = MonitorMode | list[int]
-RenderMethod: TypeAlias = Callable[..., None]
+from typing import ClassVar, Protocol, TypeAlias, TypedDict
 
 # ---- TOML Types ----------------------------------------------------------------------------
 
