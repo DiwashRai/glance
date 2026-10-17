@@ -7,10 +7,20 @@ says why and changes nothing.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
-from app.core.model import CommandWords, Event, Idle, LeftOff, Lists, ParkedTask, Task, Waiting
+from app.core.model import (
+    FOCUS_SLOTS,
+    CommandWords,
+    Event,
+    Idle,
+    LeftOff,
+    Lists,
+    ParkedTask,
+    Task,
+    Waiting,
+)
 
 
 @dataclass(frozen=True)
@@ -39,11 +49,21 @@ class Done:
 
 
 @dataclass(frozen=True)
+class Focus:
+    text: str
+
+
+@dataclass(frozen=True)
+class Unfocus:
+    query: str
+
+
+@dataclass(frozen=True)
 class Unknown:
     word: str
 
 
-Command = New | Park | Wait | Switch | Done | Unknown
+Command = New | Park | Wait | Switch | Done | Focus | Unfocus | Unknown
 
 
 @dataclass(frozen=True)
@@ -77,6 +97,10 @@ def parse_command(text: str, words: CommandWords) -> Command:
         return Switch(argument)
     if word in words.done:
         return Done(argument)
+    if word in words.focus:
+        return Focus(argument)
+    if word in words.unfocus:
+        return Unfocus(argument)
     return Unknown(first)
 
 
@@ -92,14 +116,14 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _park(lists, Waiting(on), now)
         case Switch(query=query):
             return _switch(lists, query, now)
-        case Done(extra=""):
-            return _done(lists, now)
-        case Done():
-            return Rejected("done finishes the active task: type just done")
-        case Unknown(word=""):
-            return Rejected("type a command")
+        case Done(extra=extra):
+            return _done(lists, extra, now)
+        case Focus(text=text):
+            return _focus(lists, text, now)
+        case Unfocus(query=query):
+            return _unfocus(lists, query, now)
         case Unknown(word=word):
-            return Rejected(f"not a command: {word}")
+            return Rejected(f"not a command: {word}" if word else "type a command")
 
 
 def _set_aside(
@@ -136,7 +160,8 @@ def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
         return Rejected("new needs a title")
     parked, events = _set_aside(lists, LeftOff(), now)
     message = f"started {title}{_also_parked(lists.active)}"
-    return Applied(Lists(Task(title), parked), (*events, Event(now, "started", title)), message)
+    started = replace(lists, active=Task(title), parked=parked)
+    return Applied(started, (*events, Event(now, "started", title)), message)
 
 
 def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | Rejected:
@@ -145,7 +170,9 @@ def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | R
             return Rejected("nothing is active")
         case Task(title=title):
             parked, events = _set_aside(lists, reason, now)
-            return Applied(Lists(Idle(), parked), events, _parked_message(title, reason))
+            return Applied(
+                replace(lists, active=Idle(), parked=parked), events, _parked_message(title, reason)
+            )
 
 
 def _parked_message(title: str, reason: LeftOff | Waiting) -> str:
@@ -156,11 +183,13 @@ def _parked_message(title: str, reason: LeftOff | Waiting) -> str:
             return f"parked {title}"
 
 
-def _done(lists: Lists, now: datetime) -> Applied | Rejected:
+def _done(lists: Lists, extra: str, now: datetime) -> Applied | Rejected:
+    if extra:
+        return Rejected("done finishes the active task: type just done")
     match lists.active:
         case Task(title=title):
             finished = Event(now, "finished", title)
-            return Applied(Lists(Idle(), lists.parked), (finished,), f"finished {title}")
+            return Applied(replace(lists, active=Idle()), (finished,), f"finished {title}")
         case Idle():
             return Rejected("nothing is active")
 
@@ -182,33 +211,33 @@ def _matches(query: str, title: str) -> bool:
     return query.lower() in title.lower()
 
 
-def _pick(parked: tuple[ParkedTask, ...], query: str) -> _Picked | Rejected:
+def _pick(titles: tuple[str, ...], query: str, what: str) -> _Picked | Rejected:
     """A title match first. A bare number is a position only if no title has it as a word."""
-    hits = [i for i, item in enumerate(parked) if _matches(query, item.task.title)]
+    hits = [i for i, title in enumerate(titles) if _matches(query, title)]
     if len(hits) == 1:
         return _Picked(hits[0])
     if hits:
-        options = ", ".join(f"{i + 1} {parked[i].task.title}" for i in hits)
+        options = ", ".join(f"{i + 1} {titles[i]}" for i in hits)
         return Rejected(f"'{query}' matches {len(hits)}: {options}")
-    if _is_number(query) and 1 <= int(query) <= len(parked):
+    if _is_number(query) and 1 <= int(query) <= len(titles):
         return _Picked(int(query) - 1)
-    return Rejected(f"no parked task matches '{query}'")
+    return Rejected(f"no {what} matches '{query}'")
 
 
 def _switch(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
     if not query:
         return Rejected("switch to what?")
-    match _pick(lists.parked, query):
+    match _pick(tuple(item.task.title for item in lists.parked), query, "parked task"):
         case Rejected() as rejected:
             return rejected
         case _Picked(index=index):
             chosen = lists.parked[index]
             rest = (*lists.parked[:index], *lists.parked[index + 1 :])
-            parked, events = _set_aside(Lists(lists.active, rest), LeftOff(), now)
+            parked, events = _set_aside(replace(lists, parked=rest), LeftOff(), now)
             title = chosen.task.title
             message = f"switched to {title}{_also_parked(lists.active)}{_reminder(chosen)}"
             events = (*events, Event(now, "resumed", title))
-            return Applied(Lists(chosen.task, parked), events, message)
+            return Applied(replace(lists, active=chosen.task, parked=parked), events, message)
 
 
 def _reminder(chosen: ParkedTask) -> str:
@@ -220,3 +249,31 @@ def _reminder(chosen: ParkedTask) -> str:
             return ""
         case LeftOff(note=note):
             return f" · left off: {note}"
+
+
+def _focus(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
+    if not text:
+        return Rejected("focus on what?")
+    if text.lower() in (goal.lower() for goal in lists.focus):
+        return Rejected(f"already focusing on {text}")
+    if len(lists.focus) >= FOCUS_SLOTS:
+        return Rejected("focus is full: unfocus one first, by number or name")
+    focused = replace(lists, focus=(*lists.focus, text))
+    return Applied(focused, (Event(now, "focused", text),), f"focusing on {text}")
+
+
+def _unfocus(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
+    """A number is always the row on the card: "unfocus 2" must never remove "ship phase 2" from
+    row 1, since the goal is gone once it's saved."""
+    if not query:
+        return Rejected("unfocus which? its number or name")
+    numbered = _is_number(query) and 1 <= int(query) <= len(lists.focus)
+    match _Picked(int(query) - 1) if numbered else _pick(lists.focus, query, "focus"):
+        case Rejected() as rejected:
+            return rejected
+        case _Picked(index=index):
+            text = lists.focus[index]
+            rest = (*lists.focus[:index], *lists.focus[index + 1 :])
+            return Applied(
+                replace(lists, focus=rest), (Event(now, "unfocused", text),), f"unfocused {text}"
+            )

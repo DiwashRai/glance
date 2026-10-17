@@ -26,6 +26,8 @@ Glance has two parts:
 | `wait <what>` | Park the active task as waiting on something |
 | `switch <title or number>` (or `s`) | Make a parked task active |
 | `done` (or `d`) | Finish the active task |
+| `focus <text>` | Keep one of at most two goals in view, above Parked |
+| `unfocus <name or number>` | Take a goal out of Focus |
 
 Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
 what happened is logged to `events.log` next to it.
