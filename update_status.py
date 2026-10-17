@@ -14,19 +14,10 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+from app.config import default_config
 from app.providers.registry import provider_registry
 from app.status_format import format_status_payload
 from app.types import CountsRow, ProviderContext, StatusFile, TomlTable
-
-HOME = Path(__file__).resolve().parent
-
-
-def default_config() -> Path:
-    """config.local.toml if it exists, else config.toml, next to this script: the same rule
-    glance uses, so both read the same settings."""
-    local = HOME / "config.local.toml"
-    return local if local.exists() else HOME / "config.toml"
-
 
 LOG_DIR = Path("logs")
 ALL_LOG_PATH = LOG_DIR / "update_status.log"
@@ -74,7 +65,8 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     parser = argparse.ArgumentParser(
         description="Collect provider counts and build a Glance status payload."
     )
-    parser.add_argument("--config", default=default_config(), type=Path)
+    home = Path(__file__).resolve().parent
+    parser.add_argument("--config", default=default_config(home), type=Path)
     parser.add_argument(
         "--output",
         type=Path,

@@ -38,12 +38,8 @@ class Snapshot:
 
 @dataclass(frozen=True)
 class Unreadable:
-    path: Path
-    problem: Problem
+    message: str  # what's wrong, with the line number
     stamp: Stamp  # so a fix to the file can be noticed
-
-    def message(self) -> str:
-        return f"{self.path.name} line {self.problem.line}: {self.problem.message}"
 
 
 class Store:
@@ -65,11 +61,9 @@ class Store:
         if stamp == NO_FILE:
             return Snapshot(Lists(), stamp)
         text = self.tasks_path.read_bytes().decode("utf-8-sig", errors="replace")
-        if "�" in text:
-            return Unreadable(self.tasks_path, _not_utf8(text), stamp)
-        match tasks_md.parse(text):
-            case Problem() as problem:
-                return Unreadable(self.tasks_path, problem, stamp)
+        match _not_utf8(text) if "�" in text else tasks_md.parse(text):
+            case Problem(line=line, message=message):
+                return Unreadable(f"{TASKS_FILE} line {line}: {message}", stamp)
             case Lists() as lists:
                 return Snapshot(lists, stamp)
 

@@ -15,7 +15,7 @@ def snapshot(store: Store) -> Snapshot:
         case Snapshot() as loaded:
             return loaded
         case Unreadable() as unreadable:
-            pytest.fail(unreadable.message())
+            pytest.fail(unreadable.message)
 
 
 def test_first_load_is_empty_and_creates_the_folder(tmp_path: Path) -> None:
@@ -46,7 +46,7 @@ def test_an_unreadable_file_is_refused_and_left_alone(tmp_path: Path) -> None:
     store.tasks_path.write_text("# Active\n- a\n- b\n", encoding="utf-8")
     match store.load():
         case Unreadable() as unreadable:
-            assert unreadable.message() == "tasks.md line 3: only one task can be active"
+            assert unreadable.message == "tasks.md line 3: only one task can be active"
         case Snapshot():
             pytest.fail("expected the file to be refused")
     assert store.tasks_path.read_text(encoding="utf-8") == "# Active\n- a\n- b\n"

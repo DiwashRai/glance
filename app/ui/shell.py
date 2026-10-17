@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, Qt
@@ -24,6 +23,7 @@ class Shell:
         self.hud = Hud(hud, lambda: controller.lists, counts_file, self.window.open)
         self.hotkey = Hotkey(self.window.toggle)
         self.tray = _tray(self.window)
+        self.tray.activated.connect(self._tray_clicked)
         app.installNativeEventFilter(self.hotkey)
         app.aboutToQuit.connect(self.hotkey.unregister)
         app.setQuitOnLastWindowClosed(False)  # it lives in the tray; Ctrl+Space opens it
@@ -34,6 +34,12 @@ class Shell:
         self.hotkey.register()
         self.tray.show()
         self.hud.start()
+
+    def _tray_clicked(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        """A left click opens it. Clicking the tray takes the focus first, which hides an open
+        window, so a click always opens rather than toggling. A right-click only shows the menu."""
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.window.open()
 
 
 def _tray(window: Window) -> QSystemTrayIcon:
@@ -46,19 +52,7 @@ def _tray(window: Window) -> QSystemTrayIcon:
     quit_action.triggered.connect(QCoreApplication.quit)
     menu.addActions([open_action, quit_action])
     tray.setContextMenu(menu)
-    tray.activated.connect(_on_click(window))
     return tray
-
-
-def _on_click(window: Window) -> Callable[[QSystemTrayIcon.ActivationReason], None]:
-    def clicked(reason: QSystemTrayIcon.ActivationReason) -> None:
-        """A left click opens it. Clicking the tray takes the focus first, which hides an open
-        window, so a click always opens rather than toggling. A right-click only shows the
-        menu."""
-        if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            window.open()
-
-    return clicked
 
 
 def _icon() -> QIcon:

@@ -71,9 +71,7 @@ class Window(QWidget):
         ready to type."""
         self.draw(self.controller.open())
         area = (QGuiApplication.screenAt(QCursor.pos()) or self.screen()).availableGeometry()
-        self.setFixedSize(
-            SIZE.boundedTo(area.size())
-        )  # fixed, so it never jumps; smaller on a small screen
+        self.setFixedSize(SIZE.boundedTo(area.size()))  # never jumps; smaller on a small screen
         self.move(area.center() - self.rect().center())
         self.show()
         self.raise_()

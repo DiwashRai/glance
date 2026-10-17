@@ -108,35 +108,28 @@ class Hud(QWidget):
             self._draw(shown)
 
     def _draw(self, shown: Shown) -> None:
+        """The counts go in first. The active task then goes in front of them, shortened to the
+        room they leave, or left out if there's too little."""
         for item in self.items:
             self.row.removeWidget(item)
             item.hide()
             item.deleteLater()
         style = _Style.of(self.settings, light=shown.light)
         self.frame.setStyleSheet(f"QFrame#hud {{ {style.frame} }}")
-        nothing_active = not (self.settings.show_active and shown.active)
-        if nothing_active and all(count.value == 0 for count in shown.counts):
+        active = shown.active if self.settings.show_active else ""
+        if not active and all(count.value == 0 for count in shown.counts):
             self.items = [_all_clear()]  # never an empty box: glance is here, and all is calm
-            self.row.addWidget(self.items[0])
-            self.items[0].show()
-            return
-        counts = [_count(count, self.settings, style) for count in shown.counts]
-        for item in counts:
+        else:
+            self.items = [_count(count, self.settings, style) for count in shown.counts]
+        for item in self.items:
             self.row.addWidget(item)
             item.show()  # now, so its width counts when the HUD is measured and placed
-        used = sum(item.sizeHint().width() + self.row.spacing() for item in counts)
-        title_room = min(ACTIVE_WIDTH, shown.room - used)
-        self.items = [*self._active(shown.active, style, title_room), *counts]
-
-    def _active(self, title: str, style: _Style, room: int) -> list[QWidget]:
-        """The active task goes first, shortened to the room the counts leave, or left out if
-        there's too little."""
-        if not (self.settings.show_active and title) or room < MIN_ACTIVE_WIDTH:
-            return []
-        item = _active(title, style, room)
-        self.row.insertWidget(0, item)
-        item.show()
-        return [item]
+        used = sum(item.sizeHint().width() + self.row.spacing() for item in self.items)
+        room = min(ACTIVE_WIDTH, shown.room - used)
+        if active and room >= MIN_ACTIVE_WIDTH:
+            self.items.insert(0, _active(active, style, room))
+            self.row.insertWidget(0, self.items[0])
+            self.items[0].show()
 
     def _place(self, tray: Tray, scale: float) -> None:
         """Tray rectangles are in real pixels; the main taskbar is on the primary screen."""
@@ -181,17 +174,8 @@ def _active_title(active: Task | Idle) -> str:
             return ""
 
 
-def _cell() -> tuple[QWidget, QHBoxLayout]:
-    cell = QWidget()
-    row = QHBoxLayout(cell)
-    row.setContentsMargins(0, 0, 0, 0)
-    row.setSpacing(6)
-    return cell, row
-
-
 def _active(title: str, style: _Style, room: int) -> QWidget:
     """An orange dot, like the Active card's border, then the title."""
-    cell, row = _cell()
     dot = theme.label("●", "dim", 11)
     dot.setStyleSheet(f"color: {theme.ORANGE};")
     name = theme.label("", "title", 13)
@@ -199,9 +183,7 @@ def _active(title: str, style: _Style, room: int) -> QWidget:
     shortened = name.fontMetrics().elidedText(title, Qt.TextElideMode.ElideRight, room)
     name.setText(shortened)
     name.setToolTip(title if shortened != title else "")
-    row.addWidget(dot)
-    row.addWidget(name)
-    return cell
+    return _beside(dot, name)
 
 
 def _all_clear() -> QWidget:
@@ -241,10 +223,13 @@ def _symbol(icon: str, colour: str) -> QLabel:
     return symbol
 
 
-def _beside(name: QWidget, number: QLabel) -> QWidget:
-    cell, row = _cell()
-    row.addWidget(name)
-    row.addWidget(number)
+def _beside(*widgets: QWidget) -> QWidget:
+    cell = QWidget()
+    row = QHBoxLayout(cell)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(6)
+    for widget in widgets:
+        row.addWidget(widget)
     return cell
 
 

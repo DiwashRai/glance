@@ -14,7 +14,6 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QLabel, QWidget
 
 BACKGROUND = "#0d0d0f"
-PANEL_EDGE = "#2a2a2d"
 CARD = "#151517"
 BORDER = "#2a2a2d"
 ACTIVE_CARD = "#1a150e"
@@ -83,7 +82,7 @@ def restyle(widget: QWidget, name: str, value: str) -> None:
 STYLESHEET = f"""
 QWidget {{ color: {TEXT}; }}
 QFrame[role="panel"] {{
-    background: {BACKGROUND}; border: 1px solid {PANEL_EDGE}; border-radius: 18px;
+    background: {BACKGROUND}; border: 1px solid {BORDER}; border-radius: 18px;
 }}
 QFrame[role="card"] {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 14px; }}
 QFrame[role="active"] {{

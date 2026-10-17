@@ -1,17 +1,5 @@
-"""Glance's settings, read once from the `[glance]` table of the TOML config file.
-
-```toml
-[glance]
-data_folder = ""          # empty: %LOCALAPPDATA%\\glance
-
-[glance.commands]
-park = ["park", "pause", "shelve", "defer"]
-
-[glance.hud]
-look = "native"           # or "box"
-labels = "icons"          # or "text"
-show_active = true
-```
+"""Glance's settings, read once from the `[glance]` table of the TOML config file. config.toml
+lists every key, commented out, with its default.
 
 The counts the HUD shows come from where the collector writes them: `[updater].output_path`.
 
@@ -51,13 +39,7 @@ class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
 
     def groups(self) -> dict[str, tuple[str, ...]]:
         """Each command's words, lower-cased."""
-        named = {
-            "new": self.new,
-            "park": self.park,
-            "wait": self.wait,
-            "switch": self.switch,
-            "done": self.done,
-        }
+        named: dict[str, tuple[str, ...]] = msgspec.structs.asdict(self)
         return {command: tuple(word.lower() for word in words) for command, words in named.items()}
 
     def __post_init__(self) -> None:
@@ -101,15 +83,21 @@ class Settings:
     counts_file: Path
 
 
+def default_config(home: Path) -> Path:
+    """config.local.toml in `home` if it exists, else config.toml. The collector uses the same
+    rule, so both read the same settings."""
+    local = home / "config.local.toml"
+    return local if local.exists() else home / "config.toml"
+
+
 def load_settings(path: Path) -> Settings:
     text = path.read_text(encoding="utf-8-sig") if path.exists() else ""
     file = msgspec.convert(tomllib.loads(text), _File)
     glance = file.glance
-    hud = HudSettings(glance.hud.look, glance.hud.labels, glance.hud.show_active)
     return Settings(
         data_folder=_data_folder(glance.data_folder, path.parent),
         words=CommandWords(**glance.commands.groups()),
-        hud=hud,
+        hud=HudSettings(**msgspec.structs.asdict(glance.hud)),
         counts_file=path.parent / file.updater.output_path,
     )
 

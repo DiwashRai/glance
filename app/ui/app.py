@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import QLockFile, QTimer
 from PySide6.QtWidgets import QApplication
 
-from app.config import load_settings
+from app.config import default_config, load_settings
 from app.controller import Controller
 from app.store import Store
 from app.ui.errors import ErrorHook
@@ -68,10 +68,7 @@ def config_path(home: Path, argv: list[str]) -> Path:
     if unknown:
         raise ValueError(f"unknown arguments: {' '.join(unknown)}. Usage: glance [--config PATH]")
     chosen: str = known.config
-    if chosen:
-        return Path(chosen)
-    local = home / "config.local.toml"
-    return local if local.exists() else home / "config.toml"
+    return Path(chosen) if chosen else default_config(home)
 
 
 def _now() -> datetime:
