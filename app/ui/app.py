@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import QLockFile
+from PySide6.QtCore import QLockFile, QTimer
 from PySide6.QtWidgets import QApplication
 
 from app.config import load_settings
@@ -43,6 +44,14 @@ def run(app: QApplication, home: Path, argv: list[str]) -> int:
     # Only now do errors go to the window: one during start-up (Ctrl+Space taken, say) must
     # reach the message box, not a hidden window.
     hook.show = shell.window.show_error
+    # Ctrl+C in the terminal quits cleanly (freeing Ctrl+Space and the lock), rather than
+    # surfacing as an error in whatever Python code Qt happens to be running.
+    signal.signal(signal.SIGINT, lambda _signal, _frame: app.quit())
+    # Python only notices a signal when it runs Python code, and an idle Qt loop runs none.
+    # Waking twice a second lets Ctrl+C land straight away.
+    wake = QTimer()
+    wake.timeout.connect(lambda: None)
+    wake.start(500)
 
     code = app.exec()
     lock.unlock()
