@@ -44,29 +44,17 @@ otherwise you have to kill the process from task manager or using taskkill.
 
 ## Development
 
-Install the project with the dev extras to get Ruff:
+You need [uv](https://docs.astral.sh/uv/) and [just](https://just.systems/). Then:
 
 ```bat
-python -m pip install -e ".[dev]"
+just check   :: lint, format check, types, import rules
+just gates   :: complexity, fan-out, module size, defensive counts (quality-baseline.json)
+just card    :: what your change did to the gate numbers
+just test    :: tests
+just fix     :: auto-fix lint issues and format
 ```
 
-Run the linter:
-
-```bat
-python -m ruff check .
-```
-
-Apply safe auto-fixes where available:
-
-```bat
-python -m ruff check . --fix
-```
-
-Format the codebase:
-
-```bat
-python -m ruff format .
-```
+`AGENTS.md` explains the gates and the code style they enforce.
 
 ### With Task Scheduler:
 - Create a task that triggers on logon. Add a delay if you want.

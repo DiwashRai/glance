@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "layers": {
+    "core": [
+      "app/core/*"
+    ],
+    "handlers": [
+      "glance.py",
+      "update_status.py"
+    ],
+    "ui": [
+      "app/ui/*"
+    ],
+    "tooling": [
+      "scripts/*"
+    ],
+    "boundary": [
+      "app/*"
+    ]
+  },
+  "limits": {
+    "cognitive": 15,
+    "cyclomatic": 10,
+    "module_lines": 1000,
+    "fan_out": 5
+  },
+  "allowed": {
+    "core": {
+      "is_none": 0,
+      "optional_sig": 0,
+      "isinstance": 0,
+      "try": 0,
+      "try_allowed": 0,
+      "broad_except": 0,
+      "suppressions": 0
+    },
+    "handlers": {
+      "is_none": 3,
+      "optional_sig": 4,
+      "isinstance": 18,
+      "try": 4,
+      "try_allowed": 0,
+      "broad_except": 4,
+      "suppressions": 6
+    },
+    "ui": {
+      "is_none": 0,
+      "optional_sig": 0,
+      "isinstance": 0,
+      "try": 0,
+      "try_allowed": 0,
+      "broad_except": 0,
+      "suppressions": 0
+    },
+    "tooling": {
+      "is_none": 0,
+      "optional_sig": 0,
+      "isinstance": 0,
+      "try": 0,
+      "try_allowed": 0,
+      "broad_except": 0,
+      "suppressions": 0
+    },
+    "boundary": {
+      "is_none": 5,
+      "optional_sig": 0,
+      "isinstance": 37,
+      "try": 3,
+      "try_allowed": 0,
+      "broad_except": 0,
+      "suppressions": 0
+    }
+  },
+  "cognitive_exceptions": {
+    "app/providers/jira.py::_parse_jira_input": 16,
+    "app/providers/outlook_emails.py::_parse_outlook_input": 17,
+    "app/providers/todoist.py::fetch_todoist_tasks": 22
+  },
+  "cyclomatic_exceptions": {
+    "app/providers/todoist.py::fetch_todoist_tasks": 11
+  },
+  "module_exceptions": {},
+  "budget": {
+    "stage": 1,
+    "start_lines": 1091,
+    "max_new_lines": 1300
+  },
+  "raises": []
+}

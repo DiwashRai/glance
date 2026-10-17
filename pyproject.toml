@@ -9,9 +9,10 @@ description = "A lightweight desktop renderer and status collector for glanceabl
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["notifications", "statusbar", "desktop", "tkinter"]
+dependencies = ['tomli; python_version < "3.11"']
 
 [project.optional-dependencies]
-dev = ["ruff"]
+dev = ["complexipy==8.0.1", "grimp", "import-linter", "pyright", "pytest", "ruff"]
 
 [project.scripts]
 glance-renderer = "glance:main"
@@ -25,13 +26,111 @@ include = ["app*"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
+pythonPlatform = "Windows"
 reportMissingTypeStubs = false
+reportUnnecessaryTypeIgnoreComment = "error"
+extraPaths = ["scripts"]
+exclude = ["data", "docs", ".venv"]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-extend-exclude = ["data"]
+extend-exclude = ["data", "docs"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "C4", "B", "SIM", "RET"]
+select = [
+    "E", "F", "I", "UP", "C4", "B", "SIM", "RET",
+    "BLE001",  # broad except
+    "TID251",  # banned APIs (the clock in core, below)
+    "DTZ",     # naive datetimes
+    "PGH003",  # blanket type: ignore
+    "RUF100",  # unused noqa
+    "PLR0912", "PLR0913", "PLR0915",  # branches, arguments, statements per function
+    "S110", "S112",  # try / except / pass or continue
+    "TRY002", "TRY203", "TRY300", "TRY400",  # exception style
+    "ARG",  # unused arguments
+    "ERA",  # commented-out code
+    "T20",  # print
+]
 fixable = ["ALL"]
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-statements = 40
+
+# Cyclomatic complexity is a gate (`just gates`), not part of the normal lint.
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"datetime.datetime.now".msg = "core doesn't read the clock: take `now` as a parameter"
+"datetime.datetime.utcnow".msg = "core doesn't read the clock: take `now` as a parameter"
+"datetime.datetime.today".msg = "core doesn't read the clock: take `now` as a parameter"
+"datetime.date.today".msg = "core doesn't read the clock: take `now` as a parameter"
+"time.time".msg = "core doesn't read the clock: take `now` as a parameter"
+"time.monotonic".msg = "core doesn't read the clock: take `now` as a parameter"
+
+[tool.ruff.lint.per-file-ignores]
+# The clock ban applies to app/core only.
+"!app/core/**" = ["TID251"]
+# Entry points: the one place a broad except or print is allowed. The rest are legacy lines, to
+# fix in stage 1: glance.py S110, update_status.py TRY400, todoist.py ARG001.
+"glance.py" = ["BLE001", "T201", "S110"]
+"update_status.py" = ["BLE001", "T201", "TRY400"]
+"app/providers/todoist.py" = ["ARG001"]
+"scripts/*.py" = ["T201"]
+"tests/*.py" = ["ARG"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+addopts = "-q"
+
+[tool.importlinter]
+root_packages = ["app"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Core is pure: no UI, I/O, processes, network or other glance layers"
+type = "forbidden"
+source_modules = ["app.core"]
+forbidden_modules = [
+    "PySide6",
+    "tkinter",
+    "ctypes",
+    "subprocess",
+    "socket",
+    "urllib",
+    "http",
+    "os",
+    "app.providers",
+    "app.store",
+    "app.mcp",
+    "app.agents",
+    "app.ui",
+    "app.win32",
+]
+
+[[tool.importlinter.contracts]]
+name = "Providers are independent of each other"
+type = "independence"
+modules = [
+    "app.providers.github_gh",
+    "app.providers.jira",
+    "app.providers.outlook_emails",
+    "app.providers.todoist",
+    "app.providers.dummy",
+]
+
+[[tool.importlinter.contracts]]
+name = "No import cycles"
+type = "acyclic_siblings"
+ancestors = ["app"]
+
+# Add the same contract for app.store and app.ui once they exist: import-linter rejects modules
+# that aren't there yet.
+[[tool.importlinter.contracts]]
+name = "Providers are only imported by the provider package"
+type = "protected"
+protected_modules = ["app.providers"]
+allowed_importers = ["app.providers"]
