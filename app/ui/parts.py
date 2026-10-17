@@ -1,5 +1,5 @@
-"""The overlay's pieces, as board F draws them: the Active card, the Parked card, the prompt with
-its `›`, and the key hints.
+"""The overlay's pieces, as board F draws them: the Active card, the Focus and Parked cards, the
+prompt with its `›`, and the key hints.
 
 Task text is always shown as plain text, never as HTML, and a line that doesn't fit ends in "…"
 with the full text in a tooltip.
@@ -20,11 +20,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.model import CommandWords, Idle, LeftOff, ParkedTask, Task, Waiting
+from app.core.model import FOCUS_SLOTS, CommandWords, Idle, LeftOff, ParkedTask, Task, Waiting
 from app.ui import icons, theme
 from app.ui.theme import font, label, restyle, styled
-
-PARKED_ROWS = 6  # shown in full; the rest are "+N more"
 
 
 def header(text: str, role: str = "header") -> QLabel:
@@ -105,39 +103,108 @@ class ActiveCard(QFrame):
         self.glow.setEnabled(working)
 
 
-class ParkedCard(QFrame):
-    """Numbered the way `switch` counts, most recent first, with each task's note."""
+class FocusCard(QFrame):
+    """The one or two things the work is for, numbered the way `unfocus` counts. Hidden while
+    there are none."""
 
     def __init__(self) -> None:
         super().__init__()
         styled(self, "card")
         self.setFixedWidth(340)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(8)
+        top = QHBoxLayout()
+        top.addWidget(header("Focus"))
+        top.addStretch()
+        self.slots = label("", "dim", 11)
+        top.addWidget(self.slots)
+        layout.addLayout(top)
+        self.rows: list[tuple[QWidget, Elided]] = []
+        for number in range(1, FOCUS_SLOTS + 1):
+            row = QWidget()
+            line = QHBoxLayout(row)
+            line.setContentsMargins(0, 0, 0, 0)
+            line.setSpacing(8)
+            title = Elided("title", 14)
+            line.addWidget(label(str(number), "number", 12))
+            line.addWidget(title, stretch=1)
+            layout.addWidget(row)
+            self.rows.append((row, title))
+
+    def show_focus(self, focus: tuple[str, ...]) -> None:
+        self.setVisible(bool(focus))
+        self.slots.setText(f"{len(focus)} of {FOCUS_SLOTS}")
+        for (row, title), text in zip(self.rows, (*focus, *[""] * FOCUS_SLOTS), strict=False):
+            row.setVisible(bool(text))
+            title.show_text(text)
+
+
+class ParkedCard(QFrame):
+    """Numbered the way `switch` counts, most recent first, with each task's note. Shows as many
+    as fit in the height the column gives it (less when Focus is full), then "+N more"."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        styled(self, "card")
+        self.setFixedWidth(340)
+        # Its height comes from the column, never from its rows, so filling it can't resize it.
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Ignored)
         self.list_layout = QVBoxLayout(self)
         self.list_layout.setContentsMargins(18, 14, 18, 16)
         self.list_layout.setSpacing(8)
-        top = QHBoxLayout()
+        self.top = QWidget()
+        top = QHBoxLayout(self.top)
+        top.setContentsMargins(0, 0, 0, 0)
         self.header = header("Parked")
         top.addWidget(self.header)
         top.addStretch()
         top.addWidget(label("recent first", "dim", 11))
-        self.list_layout.addLayout(top)
+        self.list_layout.addWidget(self.top)
         self.list_layout.addStretch()  # rows go above this, so the card fills its column
         self.rows: list[QWidget] = []
+        self.parked: tuple[ParkedTask, ...] = ()
 
     def show_parked(self, parked: tuple[ParkedTask, ...]) -> None:
+        self.parked = parked
         self.header.setText(f"Parked {len(parked)}".upper())
+        self._fill()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fill()
+
+    def _fill(self) -> None:
         for row in self.rows:
             self.list_layout.removeWidget(row)  # now, so it stops taking up space
             row.hide()
             row.deleteLater()
-        self.rows = [_row(number, item) for number, item in enumerate(parked[:PARKED_ROWS], 1)]
-        if not parked:
+        self.rows = self._rows_that_fit()
+        hidden = len(self.parked) - len(self.rows)
+        if not self.parked:
             self.rows.append(label("nothing parked", "dim"))
-        if len(parked) > PARKED_ROWS:
-            more = len(parked) - PARKED_ROWS
-            self.rows.append(label(f"+{more} more · s <number> to switch", "dim", 12))
+        if hidden:
+            self.rows.append(label(f"+{hidden} more · s <number> to switch", "dim", 12))
         for index, row in enumerate(self.rows):
             self.list_layout.insertWidget(1 + index, row)
+
+    def _rows_that_fit(self) -> list[QWidget]:
+        """Rows while they fit, keeping room for the "+N more" line under them."""
+        margins = self.list_layout.contentsMargins()
+        spacing = self.list_layout.spacing()
+        room = self.height() - margins.top() - margins.bottom() - self.top.sizeHint().height()
+        more = label("+", "dim", 12).sizeHint().height() + spacing
+        rows: list[QWidget] = []
+        for number, item in enumerate(self.parked, 1):
+            row = _row(number, item)
+            needed = row.sizeHint().height() + spacing
+            last = number == len(self.parked)
+            if needed + (0 if last else more) > room:
+                row.deleteLater()
+                break
+            room -= needed
+            rows.append(row)
+        return rows
 
 
 def _row(number: int, parked: ParkedTask) -> QWidget:
@@ -228,8 +295,7 @@ def hints(words: CommandWords) -> QWidget:
         layout.addWidget(label(does, "dim", 12))
         layout.addSpacing(10)
     first_words = Elided("dim", 12)
-    first_words.show_text(
-        " · ".join((words.park[0], words.switch[0], words.new[0], words.done[0], words.wait[0]))
-    )
+    commands = (words.park, words.switch, words.new, words.done, words.wait, words.focus)
+    first_words.show_text(" · ".join(command[0] for command in commands))
     layout.addWidget(first_words, stretch=1)
     return row

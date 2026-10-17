@@ -94,8 +94,8 @@ def _not_utf8(text: str) -> Problem:
 
 
 def event_line(event: Event) -> str:
-    """`2026-10-17 09:58:40+01:00  parked    Do ticket 1234 · left off: retry loop`"""
+    """`2026-10-17 09:58:40+01:00  parked     Do ticket 1234 · left off: retry loop`"""
     at = event.at.isoformat(sep=" ", timespec="seconds")
     title = event.title.replace(" · ", " - ")
     detail = f" · {event.detail}" if event.detail else ""
-    return f"{at}  {event.kind:<8}  {title}{detail}"
+    return f"{at}  {event.kind:<9}  {title}{detail}"

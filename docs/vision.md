@@ -56,7 +56,7 @@ The priority side is read top to bottom: "can I do this right now? No? Next one.
 | List | Limit | What it holds |
 |---|---|---|
 | Active | 1 | What I'm working on right now. Shown on the HUD unless I turn that off. |
-| Focus | 1-2 | Important work, or work that makes other work easier. |
+| Focus | 1-2 | What the work is for, kept in view as a reminder: something I need to deliver ("fix the vulnerabilities"), or something I'm chipping away at over time ("migrate the build", in its own worktree). Never made active. Two at most, so I chip away at one or two things instead of carrying five that never get done. Still loose: it may become a queue later. |
 | Parked | any | Tasks I've put away: paused or blocked. |
 
 Parked in more detail:
@@ -100,12 +100,14 @@ Typed into the overlay's text box. The first word decides; anything else goes to
 |---|---|
 | `park <note>` (also `pause`, `shelve`, `defer`) | Park the active task with a "left off" note |
 | `wait <reason>` | Park the active task as blocked on something |
-| `switch <name>` (or `s`) | Make a parked or Focus task active; the current one is parked |
+| `switch <name>` (or `s`) | Make a parked task active; the current one is parked |
 | `new <title>` (or `+`) | Start a new task; the current one is parked |
 | `done` (or `d`) | Finish the current step, or the task if it has no steps |
 | `skip` (or `>`) | Skip the current step |
 | `step <text>` | Add a step |
 | `quick <text>` | Add a Quick item |
+| `focus <text>` | Add to Focus, if a slot is free |
+| `unfocus <name or number>` | Take something out of Focus |
 
 Keys in the overlay and on drop cards:
 

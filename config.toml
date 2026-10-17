@@ -9,6 +9,8 @@
 # wait = ["wait"]
 # switch = ["switch", "s"]
 # done = ["done", "d"]
+# focus = ["focus"]
+# unfocus = ["unfocus"]
 
 # [glance.hud]              # the counts on the taskbar, just left of the tray
 # look = "native"           # "native": drawn onto the taskbar; "box": a dark box

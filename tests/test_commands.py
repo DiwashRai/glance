@@ -6,10 +6,12 @@ from app.core.commands import (
     Applied,
     Command,
     Done,
+    Focus,
     New,
     Park,
     Rejected,
     Switch,
+    Unfocus,
     Unknown,
     Wait,
     apply,
@@ -51,6 +53,8 @@ def applied(lists: Lists, text: str) -> Applied:
         ("d", Done()),
         ("done 1129", Done("1129")),
         ("new\tfix  the   build ", New("fix the build")),
+        ("Focus fix the vulnerabilities", Focus("fix the vulnerabilities")),
+        ("unfocus 2", Unfocus("2")),
         ("hello there", Unknown("hello")),
         ("   ", Unknown("")),
     ],
@@ -163,6 +167,32 @@ def test_switch_matches_a_title_before_a_position(lists: Lists, query: str, pick
     assert applied(lists, f"s {query}").lists.active == picked
 
 
+GOALS = ("fix the vulnerabilities", "migrate the build")
+FOCUSED = Lists(ACTIVE, (WAITING, LEFT), GOALS)
+
+
+def test_focus_adds_a_goal_while_a_slot_is_free() -> None:
+    result = applied(Lists(), "focus fix the vulnerabilities")
+    assert result.lists == Lists(focus=("fix the vulnerabilities",))
+    assert result.events == (Event(NOW, "focused", "fix the vulnerabilities"),)
+    assert result.message == "focusing on fix the vulnerabilities"
+
+
+def test_unfocus_removes_one_by_its_number_on_the_card() -> None:
+    result = applied(FOCUSED, "unfocus 2")
+    assert result.lists.focus == ("fix the vulnerabilities",)
+    assert result.events == (Event(NOW, "unfocused", "migrate the build"),)
+    # A number is the row, even when another goal has it as a word: the removal is saved at once.
+    assert applied(Lists(focus=("ship phase 2", "migrate")), "unfocus 2").lists.focus == (
+        "ship phase 2",
+    )
+
+
+@pytest.mark.parametrize("text", ["new a", "park", "wait CI", "s 1129", "done"])
+def test_focus_stays_put_whatever_happens_to_tasks(text: str) -> None:
+    assert applied(FOCUSED, text).lists.focus == GOALS
+
+
 TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("same"), LeftOff())))
 
 
@@ -179,6 +209,10 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, f"s {'9' * 5000}", f"no parked task matches '{'9' * 5000}'"),
         (TWINS, "s same", "'same' matches 2: 1 same, 2 same"),
         (DAY, "done 1129", "done finishes the active task: type just done"),
+        (DAY, "focus", "focus on what?"),
+        (FOCUSED, "focus a third", "focus is full: unfocus one first, by number or name"),
+        (FOCUSED, "focus Migrate the build", "already focusing on Migrate the build"),
+        (FOCUSED, "unfocus", "unfocus which? its number or name"),
         (DAY, "hello", "not a command: hello"),
         (DAY, "", "type a command"),
     ],

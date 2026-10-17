@@ -7,6 +7,10 @@ EXAMPLE = """\
 # Active
 - Do ticket 1234
 
+# Focus
+- Fix the vulnerabilities
+- Migrate the build to uv
+
 # Parked
 - 1129 password reset flow
   waiting on: review
@@ -22,6 +26,7 @@ LISTS = Lists(
         ParkedTask(Task("Tidy logging config"), LeftOff("half done on chore/logging")),
         ParkedTask(Task("1087 onboarding docs"), LeftOff()),
     ),
+    ("Fix the vulnerabilities", "Migrate the build to uv"),
 )
 ODD = f"a{chr(0x2028)}b{chr(0x0C)}c"  # characters str.splitlines() would split on
 
@@ -30,8 +35,8 @@ ODD = f"a{chr(0x2028)}b{chr(0x0C)}c"  # characters str.splitlines() would split 
     ("text", "lists"),
     [
         (EXAMPLE, LISTS),
-        ("# Active\n\n# Parked\n", Lists()),
-        (f"# Active\n- {ODD}\n\n# Parked\n", Lists(Task(ODD), ())),
+        ("# Active\n\n# Focus\n\n# Parked\n", Lists()),
+        (f"# Active\n- {ODD}\n\n# Focus\n\n# Parked\n", Lists(Task(ODD), ())),
     ],
 )
 def test_round_trips_exactly(text: str, lists: Lists) -> None:
@@ -73,6 +78,8 @@ def test_reads_hand_edits_leniently(text: str, lists: Lists) -> None:
         ("# Parked\n- a\n  - [ ] step\n", 3, "steps aren't supported yet"),
         ("# Parked\n-   \n", 2, "a task needs a title"),
         ("# Parked\n* a\n", 2, "glance can't read this line"),
+        ("# Focus\n- a\n- b\n- c\n", 4, "focus holds at most 2"),
+        ("# Focus\n- a\n  left off: x\n", 3, "a focus can't have a note"),
     ],
 )
 def test_refuses_what_it_cant_read_with_the_line(text: str, line: int, message: str) -> None:

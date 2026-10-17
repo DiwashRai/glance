@@ -1,5 +1,5 @@
-"""The overlay, laid out as board F: Parked on the left; Active, the prompt, the message line and
-the key hints in the middle. The time side (Today, Quick) comes later.
+"""The overlay, laid out as board F: Focus above Parked on the left; Active, the prompt, the
+message line and the key hints in the middle. The time side (Today, Quick) comes later.
 
 Ctrl+Space toggles it. Esc, or clicking anywhere else, hides it. It only talks to the
 controller.
@@ -31,6 +31,7 @@ class Window(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)  # for the rounded panel
         self.setStyleSheet(theme.STYLESHEET)
 
+        self.focus = parts.FocusCard()
         self.parked = parts.ParkedCard()
         self.active = parts.ActiveCard()
         self.prompt = parts.Prompt()
@@ -52,7 +53,11 @@ class Window(QWidget):
         columns = QHBoxLayout(panel)
         columns.setContentsMargins(40, 40, 40, 40)
         columns.setSpacing(40)
-        columns.addWidget(self.parked)
+        left = QVBoxLayout()
+        left.setSpacing(16)
+        left.addWidget(self.focus)
+        left.addWidget(self.parked, stretch=1)
+        columns.addLayout(left)
         columns.addLayout(middle, stretch=1)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -94,6 +99,7 @@ class Window(QWidget):
 
     def draw(self, view: View) -> None:
         self.active.show_active(view.lists.active)
+        self.focus.show_focus(view.lists.focus)
         self.parked.show_parked(view.lists.parked)
         self._say(view.problem or view.message, _tone(view))
 

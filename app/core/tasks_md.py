@@ -4,6 +4,9 @@
 # Active
 - Do ticket 1234
 
+# Focus
+- Fix the vulnerabilities
+
 # Parked
 - 1129 password reset flow
   waiting on: review
@@ -18,9 +21,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.core.model import Idle, LeftOff, Lists, ParkedTask, Task, Waiting
+from app.core.model import FOCUS_SLOTS, Idle, LeftOff, Lists, ParkedTask, Task, Waiting
 
-HEADINGS = {"# Active": "active", "# Parked": "parked"}
+HEADINGS = {"# Active": "active", "# Focus": "focus", "# Parked": "parked"}
 WAITING_ON = "waiting on:"
 LEFT_OFF = "left off:"
 
@@ -38,7 +41,7 @@ def render(lists: Lists) -> str:
             lines.append(f"- {title}")
         case Idle():
             pass
-    lines += ["", "# Parked"]
+    lines += ["", "# Focus", *(f"- {text}" for text in lists.focus), "", "# Parked"]
     for parked in lists.parked:
         lines.append(f"- {parked.task.title}")
         lines += _note_lines(parked.reason)
@@ -74,11 +77,12 @@ class _Reader:
         self.seen: set[str] = set()
         self.active: list[Task] = []
         self.parked: list[ParkedTask] = []
+        self.focus: list[str] = []
         self.noted = False
 
     def lists(self) -> Lists:
         active = self.active[0] if self.active else Idle()
-        return Lists(active, tuple(self.parked))
+        return Lists(active, tuple(self.parked), tuple(self.focus))
 
     def feed(self, line: str) -> str:
         if not line:
@@ -110,9 +114,17 @@ class _Reader:
             self.parked.append(ParkedTask(Task(title), LeftOff()))
             self.noted = False
             return ""
+        if self.section == "focus":
+            return self._focus(title)
         if self.active:
             return "only one task can be active"
         self.active.append(Task(title))
+        return ""
+
+    def _focus(self, text: str) -> str:
+        if len(self.focus) >= FOCUS_SLOTS:
+            return f"focus holds at most {FOCUS_SLOTS}"
+        self.focus.append(text)
         return ""
 
     def _note(self, text: str) -> str:
@@ -120,6 +132,8 @@ class _Reader:
             return "steps aren't supported yet"
         if self.section == "active":
             return "the active task can't have a note"
+        if self.section == "focus":
+            return "a focus can't have a note"
         if not self.parked or self.noted:
             return "a note goes on its own line under a parked task, one per task"
         match _reason(text):

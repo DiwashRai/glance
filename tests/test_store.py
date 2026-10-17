@@ -57,6 +57,6 @@ def test_events_are_appended_as_aligned_lines(tmp_path: Path) -> None:
     store.append([Event(AT, "started", "Do ticket 1234")])
     store.append([Event(AT, "parked", "a · b", "left off: retry loop")])
     assert store.events_path.read_text(encoding="utf-8").splitlines() == [
-        "2026-10-17 09:58:40+01:00  started   Do ticket 1234",
-        "2026-10-17 09:58:40+01:00  parked    a - b · left off: retry loop",
+        "2026-10-17 09:58:40+01:00  started    Do ticket 1234",
+        "2026-10-17 09:58:40+01:00  parked     a - b · left off: retry loop",
     ]

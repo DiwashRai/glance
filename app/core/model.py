@@ -1,7 +1,8 @@
 """Glance's lists and what happens to them, as plain frozen types.
 
 Bad states can't be written down: Active is a task or idle, and a parked task is either left off
-(with an optional "where I left off" note) or waiting on something.
+(with an optional "where I left off" note) or waiting on something. Focus is one or two things
+the work is for, kept in view as a reminder: never made active, only added and removed.
 """
 
 from __future__ import annotations
@@ -9,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
+
+FOCUS_SLOTS = 2
 
 
 @dataclass(frozen=True)
@@ -41,9 +44,10 @@ class ParkedTask:
 class Lists:
     active: Task | Idle = Idle()
     parked: tuple[ParkedTask, ...] = ()  # most recently touched first
+    focus: tuple[str, ...] = ()  # at most FOCUS_SLOTS, oldest first
 
 
-EventKind = Literal["started", "parked", "waiting", "resumed", "finished"]
+EventKind = Literal["started", "parked", "waiting", "resumed", "finished", "focused", "unfocused"]
 
 
 @dataclass(frozen=True)
@@ -72,3 +76,5 @@ class CommandWords:
     wait: tuple[str, ...] = ("wait",)
     switch: tuple[str, ...] = ("switch", "s")
     done: tuple[str, ...] = ("done", "d")
+    focus: tuple[str, ...] = ("focus",)
+    unfocus: tuple[str, ...] = ("unfocus",)
