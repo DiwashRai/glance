@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
-from app.core.model import HudSettings, Idle, Lists, Task
+from app.core.model import HudSettings, Idle, Lists, Task, working
 from app.counts import Count, CountsFile
 from app.ui import icons, theme
 from app.win32.taskbar import NoTaskbar, Tray, find_tray, full_screen_app, lift, light_taskbar
@@ -101,7 +101,7 @@ class Hud(QWidget):
             self.clicked()
 
     def _redraw_if_changed(self, room: int) -> None:
-        active = _active_title(self.lists().active)
+        active = _active_title(working(self.lists().active))
         shown = Shown(active, self.counts.read(), light_taskbar(), room)
         if shown != self.shown:
             self.shown = shown

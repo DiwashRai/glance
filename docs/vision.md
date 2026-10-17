@@ -72,7 +72,7 @@ The time side:
 | List | What it holds |
 |---|---|
 | Today | A timeline of meetings, my planned blocks, and what I actually worked on. |
-| Quick | Small next actions with a rough size (`~3m`): follow-ups ("merge 1129"), admin, small reviews. I pick from it by "what fits in the time I have", not by priority. |
+| Quick | Small things to do while I wait for a build or an agent, with an optional rough size (`~3m`): follow-ups ("merge 1129"), admin, small reviews. Smallest first, so I pick by "what fits in the time I have", not by priority. Keeping them quick is the point: anything longer deserves its own block. |
 
 Glance keeps its own files for these lists (see Data). Task titles stay short at work ("do ticket
 1135"); the detail lives in Jira, GitHub and so on. Starting a new task parks the active one and
@@ -102,10 +102,10 @@ Typed into the overlay's text box. The first word decides; anything else goes to
 | `wait <reason>` | Park the active task as blocked on something |
 | `switch <name>` (or `s`) | Make a parked task active; the current one is parked |
 | `new <title>` (or `+`) | Start a new task; the current one is parked |
-| `done` (or `d`) | Finish the current step, or the task if it has no steps |
+| `done` (or `d`) | Finish the current step, or the task if it has no steps. `done q2` ticks off a Quick item without starting it |
 | `skip` (or `>`) | Skip the current step |
 | `step <text>` | Add a step |
-| `quick <text>` | Add a Quick item |
+| `quick <text>` (or `q`) | Add a Quick item, with an optional size at the end (`~3m`, `~1h`). Switching to one (`s q2`) and parking it puts it back in Quick; parking it with a note or as waiting makes it a parked task |
 | `focus <text>` | Add to Focus, if a slot is free |
 | `unfocus <name or number>` | Take something out of Focus |
 

@@ -1,11 +1,13 @@
-"""The overlay's pieces, as board F draws them: the Active card, the Focus and Parked cards, the
-prompt with its `›`, and the key hints.
+"""The overlay's pieces, as board F draws them: the Active card, the Focus, Parked and Quick
+cards, the prompt with its `›`, and the key hints.
 
 Task text is always shown as plain text, never as HTML, and a line that doesn't fit ends in "…"
 with the full text in a tooltip.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QResizeEvent
@@ -20,7 +22,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.model import FOCUS_SLOTS, CommandWords, Idle, LeftOff, ParkedTask, Task, Waiting
+from app.core.model import (
+    FOCUS_SLOTS,
+    CommandWords,
+    FromQuick,
+    Idle,
+    LeftOff,
+    ParkedTask,
+    Task,
+    Waiting,
+    shown,
+    size_text,
+    working,
+)
 from app.ui import icons, theme
 from app.ui.theme import font, label, restyle, styled
 
@@ -87,10 +101,10 @@ class ActiveCard(QFrame):
         self.setGraphicsEffect(self.glow)
         self.setFixedHeight(76)
 
-    def show_active(self, active: Task | Idle) -> None:
-        match active:
-            case Task(title=title):
-                self.title.show_text(title)
+    def show_active(self, active: Task | FromQuick | Idle) -> None:
+        match working(active):
+            case Task() as task:
+                self.title.show_text(shown(task))
                 self._mode("active", working=True)
             case Idle():
                 self._mode("idle", working=False)
@@ -140,34 +154,36 @@ class FocusCard(QFrame):
             title.show_text(text)
 
 
-class ParkedCard(QFrame):
-    """Numbered the way `switch` counts, most recent first, with each task's note. Shows as many
-    as fit in the height the column gives it (less when Focus is full), then "+N more"."""
+class ListCard(QFrame):
+    """A titled list that shows as many rows as fit in the height its column gives it, then
+    "+N more". Parked and Quick are both one."""
 
-    def __init__(self) -> None:
+    def __init__(self, name: str, corner: str, empty: str, more: str) -> None:
         super().__init__()
         styled(self, "card")
-        self.setFixedWidth(340)
         # Its height comes from the column, never from its rows, so filling it can't resize it.
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Ignored)
+        self.name, self.empty, self.more = name, empty, more
         self.list_layout = QVBoxLayout(self)
         self.list_layout.setContentsMargins(18, 14, 18, 16)
         self.list_layout.setSpacing(8)
         self.top = QWidget()
         top = QHBoxLayout(self.top)
         top.setContentsMargins(0, 0, 0, 0)
-        self.header = header("Parked")
+        self.header = header(name)
         top.addWidget(self.header)
         top.addStretch()
-        top.addWidget(label("recent first", "dim", 11))
+        top.addWidget(label(corner, "dim", 11))
         self.list_layout.addWidget(self.top)
         self.list_layout.addStretch()  # rows go above this, so the card fills its column
         self.rows: list[QWidget] = []
-        self.parked: tuple[ParkedTask, ...] = ()
+        self.count = 0
+        self.row_at: Callable[[int], QWidget] = lambda _: QWidget()
 
-    def show_parked(self, parked: tuple[ParkedTask, ...]) -> None:
-        self.parked = parked
-        self.header.setText(f"Parked {len(parked)}".upper())
+    def show_rows(self, count: int, row_at: Callable[[int], QWidget]) -> None:
+        """`row_at(i)` builds row i (from 0), only for the rows that fit."""
+        self.count, self.row_at = count, row_at
+        self.header.setText(f"{self.name} {count}".upper())
         self._fill()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
@@ -180,11 +196,11 @@ class ParkedCard(QFrame):
             row.hide()
             row.deleteLater()
         self.rows = self._rows_that_fit()
-        hidden = len(self.parked) - len(self.rows)
-        if not self.parked:
-            self.rows.append(label("nothing parked", "dim"))
+        hidden = self.count - len(self.rows)
+        if not self.count:
+            self.rows.append(label(self.empty, "dim"))
         if hidden:
-            self.rows.append(label(f"+{hidden} more · s <number> to switch", "dim", 12))
+            self.rows.append(label(f"+{hidden} more · {self.more}", "dim", 12))
         for index, row in enumerate(self.rows):
             self.list_layout.insertWidget(1 + index, row)
 
@@ -195,16 +211,51 @@ class ParkedCard(QFrame):
         room = self.height() - margins.top() - margins.bottom() - self.top.sizeHint().height()
         more = label("+", "dim", 12).sizeHint().height() + spacing
         rows: list[QWidget] = []
-        for number, item in enumerate(self.parked, 1):
-            row = _row(number, item)
+        for index in range(self.count):
+            row = self.row_at(index)
             needed = row.sizeHint().height() + spacing
-            last = number == len(self.parked)
+            last = index == self.count - 1
             if needed + (0 if last else more) > room:
                 row.deleteLater()
                 break
             room -= needed
             rows.append(row)
         return rows
+
+
+def parked_card() -> ListCard:
+    """Numbered the way `switch` counts, most recent first, with each task's note."""
+    card = ListCard("Parked", "recent first", "nothing parked", "s <number> to switch")
+    card.setFixedWidth(340)
+    return card
+
+
+def show_parked(card: ListCard, parked: tuple[ParkedTask, ...]) -> None:
+    card.show_rows(len(parked), lambda index: _row(index + 1, parked[index]))
+
+
+def quick_card() -> ListCard:
+    """Small things to do while a build or an agent runs, smallest first, numbered q1, q2…"""
+    card = ListCard("Quick", "while you wait", "nothing quick · quick <what> ~5m", "done q<n>")
+    card.setFixedWidth(300)
+    return card
+
+
+def show_quick(card: ListCard, quick: tuple[Task, ...]) -> None:
+    card.show_rows(len(quick), lambda index: _quick_row(index + 1, quick[index]))
+
+
+def _quick_row(number: int, task: Task) -> QWidget:
+    row = QWidget()
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(8)
+    title = Elided("title", 14)
+    title.show_text(task.title)
+    layout.addWidget(label(f"q{number}", "number", 12))
+    layout.addWidget(title, stretch=1)
+    layout.addWidget(label(size_text(task), "dim", 12))
+    return row
 
 
 def _row(number: int, parked: ParkedTask) -> QWidget:
@@ -217,7 +268,7 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
     marker = QLabel()
     marker.setPixmap(_marker(parked.reason))
     title = Elided("title", 14)
-    title.show_text(parked.task.title)
+    title.show_text(shown(parked.task))
     top.addWidget(marker)
     top.addWidget(label(str(number), "number", 12))
     top.addWidget(title, stretch=1)
@@ -295,7 +346,15 @@ def hints(words: CommandWords) -> QWidget:
         layout.addWidget(label(does, "dim", 12))
         layout.addSpacing(10)
     first_words = Elided("dim", 12)
-    commands = (words.park, words.switch, words.new, words.done, words.wait, words.focus)
+    commands = (
+        words.park,
+        words.switch,
+        words.new,
+        words.done,
+        words.wait,
+        words.focus,
+        words.quick,
+    )
     first_words.show_text(" · ".join(command[0] for command in commands))
     layout.addWidget(first_words, stretch=1)
     return row
