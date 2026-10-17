@@ -1,7 +1,9 @@
 """Ctrl+Space, registered with Windows.
 
 `RegisterHotKey` with no window: Windows posts `WM_HOTKEY` to our thread, and Qt hands it to
-the native event filter below. No keyboard hooks, so nothing watches other keys.
+the native event filter below. No keyboard hooks, so nothing watches other keys: `held` asks
+whether Ctrl and Space are down right now, and is only called after a press, until they're let
+go.
 """
 
 from __future__ import annotations
@@ -16,6 +18,8 @@ HOTKEY_ID = 0x6C61  # any number unique to this app, below 0xC000
 MOD_CONTROL = 0x0002
 MOD_NOREPEAT = 0x4000
 VK_SPACE = 0x20
+VK_CONTROL = 0x11
+KEY_DOWN = 0x8000  # GetAsyncKeyState's top bit: the key is down now
 WM_HOTKEY = 0x0312
 ERROR_HOTKEY_ALREADY_REGISTERED = 1409
 HOTKEY_EVENT_TYPE = b"windows_generic_MSG"  # what WM_HOTKEY arrives as (checked with a probe)
@@ -25,10 +29,17 @@ _user32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, w
 _user32.RegisterHotKey.restype = wintypes.BOOL
 _user32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
 _user32.UnregisterHotKey.restype = wintypes.BOOL
+_user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+_user32.GetAsyncKeyState.restype = ctypes.c_short
 
 
 class HotkeyTaken(RuntimeError):
     pass
+
+
+def held() -> bool:
+    """Ctrl and Space are both still down."""
+    return all(_user32.GetAsyncKeyState(key) & KEY_DOWN for key in (VK_CONTROL, VK_SPACE))
 
 
 class Hotkey(QAbstractNativeEventFilter):

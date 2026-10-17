@@ -21,7 +21,7 @@ class Shell:
     ) -> None:
         self.window = Window(controller)
         self.hud = Hud(hud, lambda: controller.lists, counts_file, self.window.open)
-        self.hotkey = Hotkey(self.window.toggle)
+        self.hotkey = Hotkey(self.window.pressed)
         self.tray = _tray(self.window)
         self.tray.activated.connect(self._tray_clicked)
         app.installNativeEventFilter(self.hotkey)
