@@ -38,9 +38,9 @@
       "is_none": 3,
       "optional_sig": 4,
       "isinstance": 18,
-      "try": 4,
+      "try": 3,
       "try_allowed": 0,
-      "broad_except": 4,
+      "broad_except": 3,
       "suppressions": 6
     },
     "ui": {
@@ -64,21 +64,15 @@
     "boundary": {
       "is_none": 5,
       "optional_sig": 0,
-      "isinstance": 37,
+      "isinstance": 36,
       "try": 3,
       "try_allowed": 0,
       "broad_except": 0,
       "suppressions": 0
     }
   },
-  "cognitive_exceptions": {
-    "app/providers/jira.py::_parse_jira_input": 16,
-    "app/providers/outlook_emails.py::_parse_outlook_input": 17,
-    "app/providers/todoist.py::fetch_todoist_tasks": 22
-  },
-  "cyclomatic_exceptions": {
-    "app/providers/todoist.py::fetch_todoist_tasks": 11
-  },
+  "cognitive_exceptions": {},
+  "cyclomatic_exceptions": {},
   "module_exceptions": {},
   "budget": {
     "stage": 1,

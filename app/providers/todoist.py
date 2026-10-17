@@ -62,6 +62,53 @@ def parse_todoist_tasks(payload: dict[str, object]) -> list[TodoistTask]:
     return [parse_todoist_task(item) for item in results]
 
 
+def _page_request(
+    api_token: str, filter_value: str, lang: str, cursor: str
+) -> urllib.request.Request:
+    params: dict[str, str | int] = {
+        "query": filter_value,
+        "limit": DEFAULT_PAGE_SIZE,
+    }
+    if lang:
+        params["lang"] = lang
+    if cursor:
+        params["cursor"] = cursor
+
+    url = f"{TODOIST_FILTER_URL}?{urllib.parse.urlencode(params)}"
+    return urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {api_token}"},
+        method="GET",
+    )
+
+
+def _retry_or_raise(exc: urllib.error.HTTPError, attempt: int) -> None:
+    if exc.code in (502, 503) and attempt < MAX_RETRIES:
+        delay = min(2**attempt, 8)
+        logger.warning(
+            f"Todoist request failed with HTTP {exc.code}: {exc.reason}. "
+            f"Retrying in {delay}s (attempt {attempt + 2}/{MAX_RETRIES + 1})"
+        )
+        time.sleep(delay)
+        return
+    detail = exc.read().decode("utf-8", errors="replace").strip()
+    raise RuntimeError(
+        f"Todoist request failed with HTTP {exc.code}: {detail or exc.reason}"
+    ) from exc
+
+
+def _load_page(request: urllib.request.Request) -> object:
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(request) as response:
+                payload = cast(object, json.load(response))
+        except urllib.error.HTTPError as exc:
+            _retry_or_raise(exc, attempt)
+        else:
+            return payload
+    raise RuntimeError("Todoist request failed after retries")
+
+
 def fetch_todoist_tasks(api_token: str, filter_value: str, lang: str = "") -> list[TodoistTask]:
     if not api_token:
         raise ValueError("api_token must be a non-empty string")
@@ -69,54 +116,22 @@ def fetch_todoist_tasks(api_token: str, filter_value: str, lang: str = "") -> li
         raise ValueError("filter_value must be a non-empty string")
 
     task_list: list[TodoistTask] = []
-    cursor = None
+    cursor = ""
 
     for _ in range(MAX_PAGES):
-        params = {
-            "query": filter_value,
-            "limit": DEFAULT_PAGE_SIZE,
-        }
-        if cursor:
-            params["cursor"] = cursor
-
-        url = f"{TODOIST_FILTER_URL}?{urllib.parse.urlencode(params)}"
-        request = urllib.request.Request(
-            url,
-            headers={"Authorization": f"Bearer {api_token}"},
-            method="GET",
-        )
-
-        payload = None
-        for attempt in range(MAX_RETRIES + 1):
-            try:
-                with urllib.request.urlopen(request) as response:
-                    payload = json.load(response)
-                break
-            except urllib.error.HTTPError as exc:
-                if exc.code in (502, 503) and attempt < MAX_RETRIES:
-                    delay = min(2**attempt, 8)
-                    logger.warning(
-                        f"Todoist request failed with HTTP {exc.code}: {exc.reason}. "
-                        f"Retrying in {delay}s (attempt {attempt + 2}/{MAX_RETRIES + 1})"
-                    )
-                    time.sleep(delay)
-                    continue
-                detail = exc.read().decode("utf-8", errors="replace").strip()
-                raise RuntimeError(
-                    f"Todoist request failed with HTTP {exc.code}: {detail or exc.reason}"
-                ) from exc
-
+        payload = _load_page(_page_request(api_token, filter_value, lang, cursor))
         if not isinstance(payload, dict):
             raise RuntimeError("Todoist response must be a JSON object")
         payload = cast(dict[str, object], payload)
 
         task_list.extend(parse_todoist_tasks(payload))
 
-        cursor = payload.get("next_cursor")
-        if cursor is None:
+        next_cursor = payload.get("next_cursor")
+        if next_cursor is None:
             break
-        if not isinstance(cursor, str) or not cursor:
+        if not isinstance(next_cursor, str) or not next_cursor:
             raise RuntimeError("Todoist response contained an invalid next_cursor value")
+        cursor = next_cursor
 
     return task_list
 

@@ -272,16 +272,11 @@ def build_status_rows(config: AppTomlConfig) -> list[CountsRow]:
             )
             rows.append((entry.label, entry.icon, total, get_severity(total, entry.thresholds)))
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Failed to update '%s' from provider '%s': %s",
                 entry.label,
                 entry.provider,
                 exc,
-            )
-            logger.exception(
-                "Traceback for provider failure on '%s' from provider '%s'",
-                entry.label,
-                entry.provider,
             )
             logger.info(
                 "Provider '%s' for '%s' failed after %.3fs",
