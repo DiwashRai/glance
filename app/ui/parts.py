@@ -33,6 +33,7 @@ from app.core.model import (
     Waiting,
     shown,
     size_text,
+    step_line,
     working,
 )
 from app.ui import icons, theme
@@ -88,7 +89,9 @@ class ActiveCard(QFrame):
         flame.setPixmap(icons.pixmap(icons.FLAME, theme.ORANGE, 14))
         top.addWidget(flame)
         top.addWidget(header("Active", "active-header"))
-        top.addStretch()
+        self.step = Elided("dim", 13)  # where it's up to: "rerun CI · 2/4"
+        self.step.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        top.addWidget(self.step, stretch=1)
         self.title = Elided("title", 16, QFont.Weight.Medium)
         self.empty = label("nothing active · type a task, or s to switch to one", "dim")
         for widget in (self.top, self.title, self.empty):
@@ -105,6 +108,7 @@ class ActiveCard(QFrame):
         match working(active):
             case Task() as task:
                 self.title.show_text(shown(task))
+                self.step.show_text(step_line(task))
                 self._mode("active", working=True)
             case Idle():
                 self._mode("idle", working=False)
@@ -273,7 +277,7 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
     top.addWidget(label(str(number), "number", 12))
     top.addWidget(title, stretch=1)
     layout.addLayout(top)
-    note = _note(parked.reason)
+    note = _note(parked.reason) or step_line(parked.task)
     if note:
         sub = Elided("dim", 12)
         sub.setContentsMargins(36, 0, 0, 0)

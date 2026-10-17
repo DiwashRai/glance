@@ -25,7 +25,10 @@ Glance has two parts:
 | `park <note>` (or `pause`, `shelve`, `defer`) | Park the active task, with an optional "left off" note |
 | `wait <what>` | Park the active task as waiting on something |
 | `switch <title or number>` (or `s`) | Make a parked task active, or a Quick item (`s q2`) |
-| `done` (or `d`) | Finish the active task. `done q2` ticks off a Quick item |
+| `done` (or `d`) | Tick off the current step, or finish the task if it has none. `done q2` ticks off a Quick item |
+| `step <text>` | Add a step to the active task |
+| `skip` (or `>`) | Skip the current step; skipped steps come back round once |
+| `finish` | Finish the active task now, whatever its steps |
 | `focus <text>` | Keep one of at most two goals in view, above Parked |
 | `unfocus <name or number>` | Take a goal out of Focus |
 | `quick <text> ~5m` (or `q`) | Add something small to do while you wait; the size is optional |

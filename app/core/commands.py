@@ -12,14 +12,20 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TypeVar
 
+from app.core import steps
 from app.core.model import (
     FOCUS_SLOTS,
+    AllDone,
+    BackTo,
     CommandWords,
     Event,
     FromQuick,
     Idle,
     LeftOff,
     Lists,
+    NoSteps,
+    OnlyLeft,
+    OnStep,
     ParkedTask,
     Task,
     Waiting,
@@ -27,6 +33,8 @@ from app.core.model import (
     size_text,
     sized,
     smallest_first,
+    step_line,
+    where,
     working,
 )
 
@@ -72,11 +80,28 @@ class Quick:
 
 
 @dataclass(frozen=True)
+class AddStep:
+    text: str
+
+
+@dataclass(frozen=True)
+class Skip:
+    extra: str = ""
+
+
+@dataclass(frozen=True)
+class Finish:
+    extra: str = ""
+
+
+@dataclass(frozen=True)
 class Unknown:
     word: str
 
 
-Command = New | Park | Wait | Switch | Done | Focus | Unfocus | Quick | Unknown
+Command = (
+    New | Park | Wait | Switch | Done | Focus | Unfocus | Quick | AddStep | Skip | Finish | Unknown
+)
 
 
 @dataclass(frozen=True)
@@ -109,6 +134,9 @@ def parse_command(text: str, words: CommandWords) -> Command:
         (words.focus, Focus),
         (words.unfocus, Unfocus),
         (words.quick, Quick),
+        (words.step, AddStep),
+        (words.skip, Skip),
+        (words.finish, Finish),
     )
     for command_words, command in commands:
         if word in command_words:
@@ -128,10 +156,10 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _switch(lists, query, now)
         case Done(query=query):
             return _done(lists, query, now)
-        case Focus(text=text):
-            return _focus(lists, text, now)
-        case Unfocus(query=query):
-            return _unfocus(lists, query, now)
+        case Focus() | Unfocus():
+            return _focus_command(lists, command, now)
+        case AddStep() | Skip() | Finish():
+            return _step_command(lists, command, now)
         case Quick(text=text):
             return _quick(lists, text, now)
         case Unknown(word=word):
@@ -197,21 +225,81 @@ def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | R
 
 
 def _done(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
+    """The current step if the task has steps, else the task. With no step left to tick (all
+    done, or only skipped ones left), done finishes it: so the last step takes a second done."""
     if query:
         return _tick(lists, query, now)
     match working(lists.active):
-        case Task() as task:
-            finished = Event(now, "finished", task.title)
-            return Applied(replace(lists, active=Idle()), (finished,), f"finished {shown(task)}")
         case Idle():
             return Rejected("nothing is active")
+        case Task() as task:
+            match steps.tick(task):
+                case steps.Moved(task=moved, step=step, said=said):
+                    ticked = Event(now, "ticked", task.title, step)
+                    return Applied(replace(lists, active=moved), (ticked,), said)
+                case steps.NoStep():
+                    return _finish(lists, task, now)
+
+
+def _finish(lists: Lists, task: Task, now: datetime) -> Applied:
+    leftover = steps.leftover(task)
+    finished = Event(now, "finished", task.title, ", ".join(leftover))
+    said = " · ".join((f"finished {shown(task)}", *leftover))
+    return Applied(replace(lists, active=Idle()), (finished,), said)
+
+
+def _step_command(
+    lists: Lists, command: AddStep | Skip | Finish, now: datetime
+) -> Applied | Rejected:
+    match command, lists.active:
+        case _, Idle():
+            return Rejected("nothing is active")
+        case AddStep(text=""), _:
+            return Rejected("step what? for example: step rerun CI with trace")
+        case AddStep(text=text), FromQuick(task=task):
+            return _add_step(lists, task, text, " · it's a task now, not a quick item")
+        case AddStep(text=text), Task() as task:
+            return _add_step(lists, task, text, "")
+        case Skip(extra=extra), _ if extra:
+            return Rejected("skip moves past the current step: type just skip")
+        case Finish(extra=extra), _ if extra:
+            return Rejected("finish finishes the active task: type just finish")
+        case Skip(), FromQuick(task=task) | (Task() as task):
+            return _skip(lists, task, now)
+        case Finish(), FromQuick(task=task) | (Task() as task):
+            return _finish(lists, task, now)
+
+
+def _add_step(lists: Lists, task: Task, text: str, real: str) -> Applied:
+    """A Quick item given steps has become a real task (it's no longer a FromQuick): parked, it
+    goes to Parked."""
+    stepped = steps.add(task, text)
+    said = f"added step {len(stepped.steps)}: {text}{real}"
+    return Applied(replace(lists, active=stepped), (), said)
+
+
+def _skip(lists: Lists, task: Task, now: datetime) -> Applied | Rejected:
+    match steps.skip(task):
+        case steps.Moved(task=moved, step=step, said=said):
+            skipped = Event(now, "skipped", task.title, step)
+            return Applied(replace(lists, active=moved), (skipped,), said)
+        case steps.NoStep(why=why):
+            return Rejected(why)
+
+
+def _focus_command(lists: Lists, command: Focus | Unfocus, now: datetime) -> Applied | Rejected:
+    match command:
+        case Focus(text=text):
+            return _focus(lists, text, now)
+        case Unfocus(query=query):
+            return _unfocus(lists, query, now)
 
 
 def _tick(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
     """`done q2` ticks a Quick item off without making it active first. Only by its row: a tick
     can't be undone, so glance never guesses one from a name."""
     if not QUICK_ROW.fullmatch(query):
-        return Rejected("done finishes the active task; done q<number> ticks off a quick item")
+        return Rejected("done ticks the current step; done q<number> ticks off a quick item")
     match _quick_row(query, lists.quick):
         case Rejected() as rejected:
             return rejected
@@ -329,14 +417,25 @@ def _resume(
 
 
 def _reminder(chosen: ParkedTask) -> str:
-    """What the task was parked with, so switching back to it says where I was."""
+    """What the task was parked with, so switching back to it says where I was. With no note,
+    its step is the note."""
     match chosen.reason:
         case Waiting(on=on):
             return f" · was waiting on {on}"
         case LeftOff(note=""):
-            return ""
+            return _step_reminder(chosen.task)
         case LeftOff(note=note):
             return f" · left off: {note}"
+
+
+def _step_reminder(task: Task) -> str:
+    match where(task):
+        case OnStep():
+            return f" · on {step_line(task)}"
+        case BackTo() | OnlyLeft() | AllDone():
+            return f" · {step_line(task)}"
+        case NoSteps():
+            return ""
 
 
 def _focus(lists: Lists, text: str, now: datetime) -> Applied | Rejected:

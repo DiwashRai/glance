@@ -1,11 +1,14 @@
 import pytest
 
-from app.core.model import FromQuick, Idle, LeftOff, Lists, ParkedTask, Task, Waiting
+from app.core.model import FromQuick, Idle, LeftOff, Lists, ParkedTask, Step, Task, Waiting
 from app.core.tasks_md import Problem, parse, render
 
 EXAMPLE = """\
 # Active
 - Do ticket 1234
+  - [x] reproduce it
+  - [>] rerun CI with trace
+  - [ ] compare node versions
 
 # Focus
 - Fix the vulnerabilities
@@ -16,6 +19,7 @@ EXAMPLE = """\
   waiting on: review
 - Tidy logging config
   left off: half done on chore/logging
+  - [-] ask in the channel
 - 1087 onboarding docs ~2h
 
 # Quick
@@ -25,10 +29,20 @@ EXAMPLE = """\
 """
 
 LISTS = Lists(
-    Task("Do ticket 1234"),
+    Task(
+        "Do ticket 1234",
+        steps=(
+            Step("reproduce it", "done"),
+            Step("rerun CI with trace", "skipped"),
+            Step("compare node versions"),
+        ),
+    ),
     (
         ParkedTask(Task("1129 password reset flow"), Waiting("review")),
-        ParkedTask(Task("Tidy logging config"), LeftOff("half done on chore/logging")),
+        ParkedTask(
+            Task("Tidy logging config", steps=(Step("ask in the channel", "left"),)),
+            LeftOff("half done on chore/logging"),
+        ),
         ParkedTask(Task("1087 onboarding docs", 120), LeftOff()),
     ),
     ("Fix the vulnerabilities", "Migrate the build to uv"),
@@ -72,6 +86,10 @@ def test_round_trips_exactly(text: str, lists: Lists) -> None:
             Lists(Idle(), (ParkedTask(Task("a"), Waiting("CI")),)),
         ),
         ("# Parked\n- a\n  left off:\n", Lists(Idle(), (ParkedTask(Task("a"), LeftOff()),))),
+        (  # steps before the note, and [X] as some editors write it
+            "# Parked\n- a\n  - [X] s\n  waiting on: CI\n",
+            Lists(parked=(ParkedTask(Task("a", steps=(Step("s", "done"),)), Waiting("CI")),)),
+        ),
     ],
 )
 def test_reads_hand_edits_leniently(text: str, lists: Lists) -> None:
@@ -85,13 +103,22 @@ def test_reads_hand_edits_leniently(text: str, lists: Lists) -> None:
         ("# Active\n# Later\n", 2, "unknown heading '# Later'"),
         ("# Active\n# Active\n", 2, "'# Active' appears twice"),
         ("# Active\n- a\n- b\n", 3, "only one task can be active"),
-        ("# Active\n- a\n  left off: x\n", 3, "the active task can only have 'home: quick'"),
+        (
+            "# Active\n- a\n  left off: x\n",
+            3,
+            "the active task can only have steps or 'home: quick'",
+        ),
+        ("# Active\n- a\n  - [ ] s\n  home: quick\n", 4, "a quick item can't have steps"),
+        ("# Parked\n- a\n  - [ ] parent\n    - [x] child\n", 4, "a step goes two spaces in"),
+        ("# Parked\n- a\n\t- [ ] s\n", 3, "indent with two spaces, not a tab"),
         ("# Quick\n- a\n  left off: x\n", 3, "a quick item can't have a note"),
         ("# Quick\n- ~5m\n", 2, "a task needs a title"),
         ("# Parked\n  left off: x\n", 2, "a note goes on its own line under a parked task"),
         ("# Parked\n- a\n  something else\n", 3, "a note starts with 'waiting on:'"),
         ("# Parked\n- a\n  waiting on:\n", 3, "waiting on what?"),
-        ("# Parked\n- a\n  - [ ] step\n", 3, "steps aren't supported yet"),
+        ("# Parked\n- a\n  - [?] step\n", 3, "a step looks like '- [ ] text'"),
+        ("# Quick\n- a\n  - [ ] step\n", 3, "a quick item can't have steps"),
+        ("# Active\n- a\n  home: quick\n  - [ ] step\n", 4, "a quick item can't have steps"),
         ("# Parked\n-   \n", 2, "a task needs a title"),
         ("# Parked\n* a\n", 2, "glance can't read this line"),
         ("# Focus\n- a\n- b\n- c\n", 4, "focus holds at most 2"),

@@ -3,6 +3,8 @@
 ```
 # Active
 - Do ticket 1234
+  - [x] reproduce it
+  - [ ] compare node versions
 
 # Focus
 - Fix the vulnerabilities
@@ -23,7 +25,8 @@ A file that doesn't fit is refused whole, with the line number, rather than gues
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, replace
 
 from app.core.model import (
     FOCUS_SLOTS,
@@ -32,6 +35,8 @@ from app.core.model import (
     LeftOff,
     Lists,
     ParkedTask,
+    Step,
+    StepState,
     Task,
     Waiting,
     shown,
@@ -44,6 +49,10 @@ WAITING_ON = "waiting on:"
 LEFT_OFF = "left off:"
 HOME_QUICK = "home: quick"  # under the active task: it came from Quick, and goes back there
 NO_NOTES = {"focus": "a focus can't have a note", "quick": "a quick item can't have a note"}
+NO_STEPS = {"focus": "a focus can't have steps", "quick": "a quick item can't have steps"}
+STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
+MARKS: dict[str, StepState] = {" ": "open", "x": "done", "X": "done", ">": "skipped", "-": "left"}
+BOXES: dict[StepState, str] = {"open": " ", "done": "x", "skipped": ">", "left": "-"}
 
 
 @dataclass(frozen=True)
@@ -58,19 +67,23 @@ def render(lists: Lists) -> str:
         case FromQuick(task=task):
             lines += [_task_line(task), f"  {HOME_QUICK}"]
         case Task() as task:
-            lines.append(_task_line(task))
+            lines += [_task_line(task), *_step_lines(task)]
         case Idle():
             pass
     lines += ["", "# Focus", *(f"- {text}" for text in lists.focus), "", "# Parked"]
     for parked in lists.parked:
         lines.append(_task_line(parked.task))
-        lines += _note_lines(parked.reason)
+        lines += [*_note_lines(parked.reason), *_step_lines(parked.task)]
     lines += ["", "# Quick", *(_task_line(task) for task in lists.quick)]
     return "\n".join(lines) + "\n"
 
 
 def _task_line(task: Task) -> str:
     return f"- {shown(task)}"
+
+
+def _step_lines(task: Task) -> list[str]:
+    return [f"  - [{BOXES[step.state]}] {step.text}" for step in task.steps]
 
 
 def _note_lines(reason: LeftOff | Waiting) -> list[str]:
@@ -119,9 +132,21 @@ class _Reader:
             return "text before the first heading"
         if line == "-" or line.startswith("- "):
             return self._task(line[1:].strip())
-        if line.startswith("  "):
-            return self._note(line.strip())
+        if line.startswith(" "):
+            return self._indented(line)
+        if line.startswith("\t"):
+            return "indent with two spaces, not a tab"
         return "glance can't read this line"
+
+    def _indented(self, line: str) -> str:
+        """Under a task: a note, or a step at exactly two spaces. A step indented further would
+        be a step inside a step, which glance can't keep, so it's refused rather than flattened."""
+        text = line.strip()
+        if not text.startswith("- "):
+            return self._note(text) if line.startswith("  ") else "glance can't read this line"
+        if not line.startswith("  - "):
+            return "a step goes two spaces in, then - [ ] text (no steps inside steps)"
+        return self._step(text)
 
     def _heading(self, line: str) -> str:
         section = HEADINGS.get(line, "")
@@ -163,8 +188,6 @@ class _Reader:
         return ""
 
     def _note(self, text: str) -> str:
-        if text.startswith("- "):
-            return "steps aren't supported yet"
         if self.section == "active":
             return self._home(text)
         if self.section in NO_NOTES:
@@ -182,11 +205,37 @@ class _Reader:
     def _home(self, text: str) -> str:
         """Once is enough: a second `home: quick` finds a FromQuick, not a Task."""
         match self.active:
-            case Task() as task if text.lower() == HOME_QUICK:
+            case Task(steps=()) as task if text.lower() == HOME_QUICK:
                 self.active = FromQuick(task)
                 return ""
+            case Task() if text.lower() == HOME_QUICK:
+                return NO_STEPS["quick"]
+            case FromQuick():
+                return f"a task from quick has only '{HOME_QUICK}' under it, once"
             case _:
-                return f"the active task can only have '{HOME_QUICK}' under it"
+                return f"the active task can only have steps or '{HOME_QUICK}' under it"
+
+    def _step(self, text: str) -> str:
+        match STEP.split(text, maxsplit=1):
+            case ["", mark, words]:
+                step = Step(" ".join(words.split()), MARKS[mark])
+            case _:
+                return "a step looks like '- [ ] text': [x] done, [>] skipped, [-] skipped again"
+        match self.section, self.active:
+            case "active", Task() as task:
+                self.active = replace(task, steps=(*task.steps, step))
+            case "parked", _ if self.parked:
+                last = self.parked[-1]
+                self.parked[-1] = replace(
+                    last, task=replace(last.task, steps=(*last.task.steps, step))
+                )
+            case "active", FromQuick():
+                return NO_STEPS["quick"]
+            case section, _ if section in NO_STEPS:
+                return NO_STEPS[section]
+            case _:
+                return "a step goes under a task"
+        return ""
 
 
 @dataclass(frozen=True)

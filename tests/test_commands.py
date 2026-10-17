@@ -4,14 +4,17 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.commands import (
+    AddStep,
     Applied,
     Command,
     Done,
+    Finish,
     Focus,
     New,
     Park,
     Quick,
     Rejected,
+    Skip,
     Switch,
     Unfocus,
     Unknown,
@@ -27,6 +30,7 @@ from app.core.model import (
     LeftOff,
     Lists,
     ParkedTask,
+    Step,
     Task,
     Waiting,
 )
@@ -69,6 +73,9 @@ def applied(lists: Lists, text: str) -> Applied:
         ("unfocus 2", Unfocus("2")),
         ("q merge 1129 ~3m", Quick("merge 1129 ~3m")),
         ("done q2", Done("q2")),
+        ("step rerun CI", AddStep("rerun CI")),
+        (">", Skip()),
+        ("finish", Finish()),
         ("hello there", Unknown("hello")),
         ("   ", Unknown("")),
     ],
@@ -228,7 +235,7 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "s q0000001", "there's no q0000001 in quick"),
         (DAY, "quick ~5m", "quick what? for example: quick merge 1129 ~3m"),
         (TWINS, "s same", "'same' matches 2: 1 same, 2 same"),
-        (DAY, "done 1129", "done finishes the active task; done q<number> ticks off a quick item"),
+        (DAY, "done 1129", "done ticks the current step; done q<number> ticks off a quick item"),
         (DAY, "done q1", "there's no q1 in quick"),
         (DAY, "s q1", "there's no q1 in quick"),
         (DAY, "quick", "quick what? for example: quick merge 1129 ~3m"),
@@ -236,6 +243,11 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (FOCUSED, "focus a third", "focus is full: unfocus one first, by number or name"),
         (FOCUSED, "focus Migrate the build", "already focusing on Migrate the build"),
         (FOCUSED, "unfocus", "unfocus which? its number or name"),
+        (Lists(), "step a", "nothing is active"),
+        (DAY, "step", "step what? for example: step rerun CI with trace"),
+        (DAY, "skip", "no steps to skip · step <text> adds one"),
+        (DAY, "skip it", "skip moves past the current step: type just skip"),
+        (DAY, "finish now", "finish finishes the active task: type just finish"),
         (DAY, "hello", "not a command: hello"),
         (DAY, "", "type a command"),
     ],
@@ -299,3 +311,63 @@ def test_switch_picks_the_row_the_card_shows(
 
 def test_done_q2_ticks_row_2_even_when_another_title_says_q2() -> None:
     assert applied(Lists(quick=(ROADMAP, REPLY)), "done q2").lists.quick == (ROADMAP,)
+
+
+def said(lists: Lists, *texts: str) -> tuple[Lists, list[str]]:
+    """Runs each line in turn, keeping what glance said."""
+    messages: list[str] = []
+    for text in texts:
+        result = applied(lists, text)
+        lists = result.lists
+        messages.append(result.message)
+    return lists, messages
+
+
+def test_done_ticks_steps_in_order_and_the_last_takes_a_second_done() -> None:
+    lists, messages = said(DAY, "step reproduce it", "step rerun CI", "done", "done", "done")
+    assert messages[2:] == [
+        "done: reproduce it · next: rerun CI · 2/2",
+        "done: rerun CI · all 2 steps done · done again to finish 1135 fix token refresh race",
+        "finished 1135 fix token refresh race",
+    ]
+    assert lists.active == Idle()
+
+
+def test_skipped_steps_come_back_round_then_done_finishes_anyway() -> None:
+    lists, messages = said(DAY, "step a", "step b", "skip", "done", "skip")
+    assert messages[2:] == [
+        "skipped: a · next: b · 2/2",
+        "done: b · back to skipped: a",
+        "skipped again: a · only skipped steps left · done to finish anyway",
+    ]
+    reason = "nothing to skip · only skipped steps left · done to finish anyway"
+    assert run(lists, "skip") == Rejected(reason)
+    finished = applied(lists, "done").message
+    assert finished == "finished 1135 fix token refresh race · 1 step skipped"
+
+
+def test_finish_finishes_early_and_says_what_was_left() -> None:
+    _, messages = said(DAY, "step a", "step b", "finish")
+    assert messages[-1] == "finished 1135 fix token refresh race · 2 steps not done"
+
+
+def test_a_quick_item_given_steps_is_a_real_task_and_parks_in_parked() -> None:
+    lists, messages = said(QUICK_DAY, "s q2", "step find the notes", "park")
+    assert messages[1] == "added step 1: find the notes · it's a task now, not a quick item"
+    assert lists.quick == (MERGE,)
+    assert lists.parked[0].task == Task("reply to Sam", steps=(Step("find the notes"),))
+
+
+def test_one_step_reads_well_and_skip_after_it_says_whats_next() -> None:
+    lists, messages = said(DAY, "step a", "done")
+    finish_line = "the step is done · done again to finish 1135 fix token refresh race"
+    assert messages[1] == f"done: a · {finish_line}"
+    assert run(lists, "skip") == Rejected(f"nothing to skip · {finish_line}")
+
+
+def test_parking_and_coming_back_keeps_the_steps_and_the_place() -> None:
+    lists, messages = said(DAY, "step a", "step b", "done", "park", "new x", "s 1")
+    assert lists.active == replace(ACTIVE, steps=(Step("a", "done"), Step("b")))
+    assert messages[-1].endswith(" · on b · 2/2")
+    _, messages = said(lists, "done", "park", "s 1")
+    assert messages[-1].endswith(" · all 2 steps done")

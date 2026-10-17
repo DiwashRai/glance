@@ -18,10 +18,82 @@ FOCUS_SLOTS = 2
 SIZE = re.compile(r"(?:\A|\s+)~([1-9][0-9]{0,3})([mh])\Z")
 
 
+StepState = Literal["open", "done", "skipped", "left"]  # left: skipped twice, not come back to
+
+
+@dataclass(frozen=True)
+class Step:
+    text: str
+    state: StepState = "open"
+
+
 @dataclass(frozen=True)
 class Task:
     title: str
     minutes: int = 0  # its rough size, 0 when none was given
+    steps: tuple[Step, ...] = ()  # an ordered checklist, one level deep
+
+
+@dataclass(frozen=True)
+class OnStep:
+    """On an open step: the first one."""
+
+    index: int
+
+
+@dataclass(frozen=True)
+class BackTo:
+    """No step is open, so back round to the first skipped one."""
+
+    index: int
+
+
+@dataclass(frozen=True)
+class OnlyLeft:
+    """Every step is done or left (skipped twice), and at least one is left."""
+
+
+@dataclass(frozen=True)
+class AllDone:
+    """Every step is done."""
+
+
+@dataclass(frozen=True)
+class NoSteps:
+    pass
+
+
+Where = OnStep | BackTo | OnlyLeft | AllDone | NoSteps
+
+
+def where(task: Task) -> Where:
+    """Where the task is up to in its steps."""
+    states = [step.state for step in task.steps]
+    if "open" in states:
+        return OnStep(states.index("open"))
+    if "skipped" in states:
+        return BackTo(states.index("skipped"))
+    if "left" in states:
+        return OnlyLeft()
+    return AllDone() if states else NoSteps()
+
+
+def step_line(task: Task) -> str:
+    """Where the task is up to, as the Active card, the HUD and Parked show it: "rerun CI · 2/4",
+    "back to skipped: rerun CI", "only skipped steps left", "all 4 steps done". "" with no
+    steps."""
+    count = len(task.steps)
+    match where(task):
+        case OnStep(index=index):
+            return f"{task.steps[index].text} · {index + 1}/{count}"
+        case BackTo(index=index):
+            return f"back to skipped: {task.steps[index].text}"
+        case OnlyLeft():
+            return "only skipped steps left"
+        case AllDone():
+            return f"all {count} steps done" if count > 1 else "the step is done"
+        case NoSteps():
+            return ""
 
 
 @dataclass(frozen=True)
@@ -98,7 +170,16 @@ class Lists:
 
 
 EventKind = Literal[
-    "started", "parked", "waiting", "resumed", "finished", "focused", "unfocused", "added"
+    "started",
+    "parked",
+    "waiting",
+    "resumed",
+    "finished",
+    "focused",
+    "unfocused",
+    "added",
+    "ticked",
+    "skipped",
 ]
 
 
@@ -131,3 +212,6 @@ class CommandWords:
     focus: tuple[str, ...] = ("focus",)
     unfocus: tuple[str, ...] = ("unfocus",)
     quick: tuple[str, ...] = ("quick", "q")
+    step: tuple[str, ...] = ("step",)
+    skip: tuple[str, ...] = ("skip", ">")
+    finish: tuple[str, ...] = ("finish",)
