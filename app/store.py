@@ -40,6 +40,7 @@ class Snapshot:
 class Unreadable:
     path: Path
     problem: Problem
+    stamp: Stamp  # so a fix to the file can be noticed
 
     def message(self) -> str:
         return f"{self.path.name} line {self.problem.line}: {self.problem.message}"
@@ -63,10 +64,12 @@ class Store:
         stamp = self.stamp()
         if stamp == NO_FILE:
             return Snapshot(Lists(), stamp)
-        text = self.tasks_path.read_text(encoding="utf-8-sig")
+        text = self.tasks_path.read_bytes().decode("utf-8-sig", errors="replace")
+        if "�" in text:
+            return Unreadable(self.tasks_path, _not_utf8(text), stamp)
         match tasks_md.parse(text):
             case Problem() as problem:
-                return Unreadable(self.tasks_path, problem)
+                return Unreadable(self.tasks_path, problem, stamp)
             case Lists() as lists:
                 return Snapshot(lists, stamp)
 
@@ -88,6 +91,12 @@ class Store:
         self.folder.mkdir(parents=True, exist_ok=True)
         with self.events_path.open("a", encoding="utf-8", newline="\n") as file:
             file.writelines(f"{event_line(event)}\n" for event in events)
+
+
+def _not_utf8(text: str) -> Problem:
+    """Bytes that aren't UTF-8 decode to U+FFFD; point at the first one."""
+    line = text[: text.index("�")].count("\n") + 1
+    return Problem(line, "this isn't UTF-8 text: save the file as UTF-8")
 
 
 def event_line(event: Event) -> str:

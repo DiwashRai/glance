@@ -21,8 +21,8 @@ import complexipy
 import grimp
 
 ROOT = Path(__file__).resolve().parent.parent
-MEASURED = ("app", "scripts", "glance.py", "update_status.py")
-ENTRY_POINTS = ("glance", "update_status")
+MEASURED = ("app", "scripts", "glance.py", "glance_v2.py", "update_status.py")
+ENTRY_POINTS = ("glance", "glance_v2", "update_status")
 METRICS = (
     "is_none",
     "optional_sig",
@@ -36,7 +36,7 @@ SUPPRESSION_MARKERS = ("noqa", "pyright: ignore", "type: ignore")
 # First match wins. Patterns use fnmatch, where "*" also matches "/".
 DEFAULT_LAYERS = {
     "core": ["app/core/*"],
-    "handlers": ["glance.py", "update_status.py"],
+    "handlers": ["glance.py", "glance_v2.py", "update_status.py"],
     "ui": ["app/ui/*"],
     "tooling": ["scripts/*"],
     "boundary": ["app/*"],
