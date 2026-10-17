@@ -42,9 +42,9 @@ class Controller:
         match self.store.load():
             case Snapshot(lists=lists, stamp=stamp):
                 self.lists, self.stamp, self.problem = lists, stamp, ""
-            case Unreadable(stamp=stamp) as unreadable:
+            case Unreadable(message=message, stamp=stamp):
                 self.stamp = stamp
-                self.problem = f"{unreadable.message()}. Fix it, then run the command again."
+                self.problem = f"{message}. Fix it, then run the command again."
         return View(self.lists, problem=self.problem)
 
     def run(self, text: str) -> View:

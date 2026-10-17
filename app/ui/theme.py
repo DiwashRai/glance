@@ -1,4 +1,5 @@
-"""Board F's look: colours, the font, and one stylesheet for every part of the overlay.
+"""Board F's look: colours, the font, a plain label in it, and one stylesheet for every part of
+the overlay.
 
 Widgets pick their style with a `role` property (`role="card"`), since Qt stylesheets match
 properties rather than CSS classes.
@@ -8,11 +9,11 @@ from __future__ import annotations
 
 from typing import TypeVar
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QLabel, QWidget
 
 BACKGROUND = "#0d0d0f"
-PANEL_EDGE = "#2a2a2d"
 CARD = "#151517"
 BORDER = "#2a2a2d"
 ACTIVE_CARD = "#1a150e"
@@ -30,6 +31,17 @@ YELLOW = "#f4d03f"
 BLUE = "#5dade2"
 RED = "#e74c3c"
 GREY_RING = "#a0a0a3"
+GREEN = "#58d68d"  # all clear
+
+# The HUD on the taskbar (canvas boards W1 to W9)
+HUD_TEXT_LIGHT = "#1b1b1d"  # text on a light taskbar
+HUD_QUIET_DARK = "#3a3a3f"  # a quiet count's badge, dark taskbar
+HUD_QUIET_LIGHT = "#6b6b70"  # a quiet count's badge, light taskbar
+HUD_RIM_LIGHT = "#eeeeee"  # a badge's rim: roughly the taskbar's own colour, light
+HUD_RIM_DARK = "#1c1c1c"  # and dark
+HUD_WARN = "background: #b35c00;"  # level 2
+HUD_ALERT = "background: #c0392b;"  # level 3, or a failed provider
+HUD_BOX = f"background: {CARD}; border: 1px solid {BORDER}; border-radius: 8px;"
 
 FONTS = ["JetBrains Mono", "JetBrainsMono NF", "Cascadia Mono", "Consolas"]
 
@@ -50,6 +62,16 @@ def styled(widget: W, role: str) -> W:
     return widget
 
 
+def label(
+    text: str, role: str, size: int = 13, weight: QFont.Weight = QFont.Weight.Normal
+) -> QLabel:
+    """Always plain text, never HTML."""
+    widget = styled(QLabel(text), role)
+    widget.setFont(font(size, weight))
+    widget.setTextFormat(Qt.TextFormat.PlainText)
+    return widget
+
+
 def restyle(widget: QWidget, name: str, value: str) -> None:
     """Change a style property and make Qt apply the stylesheet to it again."""
     widget.setProperty(name, value)
@@ -60,7 +82,7 @@ def restyle(widget: QWidget, name: str, value: str) -> None:
 STYLESHEET = f"""
 QWidget {{ color: {TEXT}; }}
 QFrame[role="panel"] {{
-    background: {BACKGROUND}; border: 1px solid {PANEL_EDGE}; border-radius: 18px;
+    background: {BACKGROUND}; border: 1px solid {BORDER}; border-radius: 18px;
 }}
 QFrame[role="card"] {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 14px; }}
 QFrame[role="active"] {{

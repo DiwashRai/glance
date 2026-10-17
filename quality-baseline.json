@@ -76,9 +76,15 @@
   "cyclomatic_exceptions": {},
   "module_exceptions": {},
   "budget": {
-    "stage": 1,
-    "start_lines": 1091,
-    "max_new_lines": 1300
+    "stage": 2,
+    "start_lines": 2240,
+    "max_new_lines": 600
   },
-  "raises": []
+  "raises": [
+    {
+      "date": "2026-10-17",
+      "what": "budget.stage, budget.start_lines",
+      "reason": "Start stage 2 (replace v1's bar): stage 1 (the overlay) ended at +1149 of 1300 on glance-v2. The HUD is stage 2 work but was counted against stage 1, so start_lines moves to stage 1's end (1091 + 1149). Stage 2 also deletes the tkinter bar, so it should end well under 600."
+    }
+  ]
 }

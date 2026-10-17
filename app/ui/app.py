@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import QLockFile, QTimer
 from PySide6.QtWidgets import QApplication
 
-from app.config import load_settings
+from app.config import default_config, load_settings
 from app.controller import Controller
 from app.store import Store
 from app.ui.errors import ErrorHook
@@ -39,7 +39,9 @@ def run(app: QApplication, home: Path, argv: list[str]) -> int:
         raise AlreadyRunning("glance is already running")
     hook.log_to(settings.data_folder / "glance.log")
 
-    shell = Shell(app, Controller(Store(settings.data_folder), settings.words, _now))
+    controller = Controller(Store(settings.data_folder), settings.words, _now)
+    controller.open()  # so the HUD shows the active task before the overlay is first opened
+    shell = Shell(app, controller, settings.hud, settings.counts_file)
     shell.start()
     # Only now do errors go to the window: one during start-up (Ctrl+Space taken, say) must
     # reach the message box, not a hidden window.
@@ -66,10 +68,7 @@ def config_path(home: Path, argv: list[str]) -> Path:
     if unknown:
         raise ValueError(f"unknown arguments: {' '.join(unknown)}. Usage: glance [--config PATH]")
     chosen: str = known.config
-    if chosen:
-        return Path(chosen)
-    local = home / "config.local.toml"
-    return local if local.exists() else home / "config.toml"
+    return Path(chosen) if chosen else default_config(home)
 
 
 def _now() -> datetime:

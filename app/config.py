@@ -1,12 +1,7 @@
-"""Glance's settings, read once from the `[glance]` table of the TOML config file.
+"""Glance's settings, read once from the `[glance]` table of the TOML config file. config.toml
+lists every key, commented out, with its default.
 
-```toml
-[glance]
-data_folder = ""          # empty: %LOCALAPPDATA%\\glance
-
-[glance.commands]
-park = ["park", "pause", "shelve", "defer"]
-```
+The counts the HUD shows come from where the collector writes them: `[updater].output_path`.
 
 Every key has a default, and a missing file means all defaults. msgspec does the checking: any
 bad or unknown value under `[glance]` raises `msgspec.ValidationError` naming the key. The other
@@ -19,11 +14,11 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import msgspec
 
-from app.core.model import CommandWords
+from app.core.model import CommandWords, HudSettings
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -44,13 +39,7 @@ class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
 
     def groups(self) -> dict[str, tuple[str, ...]]:
         """Each command's words, lower-cased."""
-        named = {
-            "new": self.new,
-            "park": self.park,
-            "wait": self.wait,
-            "switch": self.switch,
-            "done": self.done,
-        }
+        named: dict[str, tuple[str, ...]] = msgspec.structs.asdict(self)
         return {command: tuple(word.lower() for word in words) for command, words in named.items()}
 
     def __post_init__(self) -> None:
@@ -63,26 +52,54 @@ class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
                     raise ValueError(f"'{word}' is used by both {first} and {command}")
 
 
+class _Hud(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
+    look: Literal["native", "box"] = "native"
+    labels: Literal["icons", "text"] = "icons"
+    show_active: bool = True
+
+
 class _Glance(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     data_folder: str = ""
     commands: _Commands = msgspec.field(default_factory=_Commands)
+    hud: _Hud = msgspec.field(default_factory=_Hud)
+
+
+class _Updater(msgspec.Struct, frozen=True):
+    """The collector's table: glance only reads where it writes the counts."""
+
+    output_path: str = "data/status.local.json"
 
 
 class _File(msgspec.Struct, frozen=True):
     glance: _Glance = msgspec.field(default_factory=_Glance)
+    updater: _Updater = msgspec.field(default_factory=_Updater)
 
 
 @dataclass(frozen=True)
 class Settings:
     data_folder: Path
     words: CommandWords
+    hud: HudSettings
+    counts_file: Path
+
+
+def default_config(home: Path) -> Path:
+    """config.local.toml in `home` if it exists, else config.toml. The collector uses the same
+    rule, so both read the same settings."""
+    local = home / "config.local.toml"
+    return local if local.exists() else home / "config.toml"
 
 
 def load_settings(path: Path) -> Settings:
     text = path.read_text(encoding="utf-8-sig") if path.exists() else ""
-    glance = msgspec.convert(tomllib.loads(text), _File).glance
-    words = CommandWords(**glance.commands.groups())
-    return Settings(_data_folder(glance.data_folder, path.parent), words)
+    file = msgspec.convert(tomllib.loads(text), _File)
+    glance = file.glance
+    return Settings(
+        data_folder=_data_folder(glance.data_folder, path.parent),
+        words=CommandWords(**glance.commands.groups()),
+        hud=HudSettings(**msgspec.structs.asdict(glance.hud)),
+        counts_file=path.parent / file.updater.output_path,
+    )
 
 
 def _data_folder(value: str, config_folder: Path) -> Path:

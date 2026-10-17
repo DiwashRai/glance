@@ -10,7 +10,13 @@
 # switch = ["switch", "s"]
 # done = ["done", "d"]
 
-# Where the counts come from. update_status.py reads these; the v2 HUD will show the counts.
+# [glance.hud]              # the counts on the taskbar, just left of the tray
+# look = "native"           # "native": drawn onto the taskbar; "box": a dark box
+# labels = "icons"          # "icons": each entry's icon below; "text": its label
+# show_active = true        # the active task, before the counts
+
+# Where the counts come from. update_status.py reads these, and the HUD shows what it writes
+# to [updater].output_path.
 
 [updater]
 output_path = "data/status.local.json"
@@ -22,7 +28,7 @@ output_path = "data/status.local.json"
 [[entries]]
 provider = "demo"
 label = "email/inbox"
-icon = "󰇮"
+icon = "mail"
 thresholds = { low = 5, medium = 10, high = 20 }
 requests = [
   { key = "email/inbox", start = 18 }
@@ -31,7 +37,7 @@ requests = [
 [[entries]]
 provider = "demo"
 label = "tasks/today"
-icon = ""
+icon = "todo"
 thresholds = { low = 1, medium = 5, high = 10 }
 requests = [
   { key = "tasks/today", start = 12 }
@@ -40,7 +46,7 @@ requests = [
 [[entries]]
 provider = "demo"
 label = "github/reviews"
-icon = ""
+icon = "pr"
 thresholds = { low = 1, medium = 3, high = 6 }
 requests = [
   { key = "github/reviews", start = 7 }

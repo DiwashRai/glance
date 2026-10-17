@@ -55,6 +55,15 @@ class Event:
 
 
 @dataclass(frozen=True)
+class HudSettings:
+    """How the HUD on the taskbar looks."""
+
+    look: Literal["native", "box"] = "native"  # native: drawn straight onto the taskbar
+    labels: Literal["icons", "text"] = "icons"
+    show_active: bool = True
+
+
+@dataclass(frozen=True)
 class CommandWords:
     """The words that start each command. Lower case, one word each, no word used twice."""
 
