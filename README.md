@@ -10,7 +10,35 @@ clients, browsers etc.
 
 Instructions are for windows at the moment.
 
-## Usage
+## Glance v2 (in progress)
+
+v2 is a task overlay: press Ctrl+Space anywhere to open it, type a command, Enter to run it, Esc
+to hide it. It lives in the tray; right-click the orange dot to quit. `docs/vision.md` says where
+it's going.
+
+| Command | Does |
+|---|---|
+| `new <title>` (or `+`) | Start a task. Anything active is parked. |
+| `park <note>` (or `pause`, `shelve`, `defer`) | Park the active task, with an optional "left off" note |
+| `wait <what>` | Park the active task as waiting on something |
+| `switch <title or number>` (or `s`) | Make a parked task active |
+| `done` (or `d`) | Finish the active task |
+
+Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
+what happened is logged to `events.log` next to it. Settings go under `[glance]` in
+`config.local.toml` (see `config.toml` for the defaults).
+
+v2 takes over the `[glance]` table from the v1 bar, so the v1 bar no longer runs with this
+config. If your `config.local.toml` still has v1's keys there (`path`, `poll`, `pos` and so on),
+glance stops with "unknown field": back the file up, then delete those keys. Keep `[updater]`,
+`[providers]` and `[[entries]]`: they're where the counts come from.
+
+To start it at login, add a Task Scheduler task that runs `scripts\run_glance_v2.cmd` on logon,
+with "Run only when user is logged on" (as below for v1). The script needs
+[uv](https://docs.astral.sh/uv/): it installs or updates glance's dependencies before starting
+it. glance refuses to run a second copy, so starting it twice is harmless.
+
+## Usage (v1)
 The repo is set up so you can keep tracked defaults in `config.toml` and personal settings in
 `config.local.toml`. The local file is ignored, so your tokens, folder selections, and status
 file path do not block `git pull`.
