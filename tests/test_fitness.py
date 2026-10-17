@@ -44,6 +44,21 @@ def test_counts_each_defensive_pattern() -> None:
     }
 
 
+def test_builtin_class_patterns_count_as_isinstance() -> None:
+    source = (
+        "def f(x: object, y: object) -> None:\n"
+        "    match x:\n"
+        "        case str(name):\n"
+        "            pass\n"
+        "        case {'n': int()}:\n"
+        "            pass\n"
+        "        case Point():\n"
+        "            pass\n"
+    )
+    report = measures.analyse("app/x.py", source, LAYERS)
+    assert report.hits["isinstance"] == [3, 5]
+
+
 def test_return_none_is_not_optional() -> None:
     report = measures.analyse("app/x.py", "def g() -> None:\n    return\n", LAYERS)
     assert report.hits["optional_sig"] == []

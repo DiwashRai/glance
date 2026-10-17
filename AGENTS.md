@@ -4,8 +4,8 @@
 
 ## Before you say you're done
 
-Run `just check`, `just gates` and `just test`; all must pass. Put the `just card` output in your
-report.
+Run `just check`, `just gates` and `just test`; all must pass. Put the `just card glance-v2`
+output in your report (v2 work branches off `glance-v2`).
 
 | Command | What it does |
 |---|---|
@@ -28,8 +28,9 @@ Measured limits on the whole codebase. The numbers live in `quality-baseline.jso
 - **module size**: a module has more than 1000 code lines. Split it.
 - **defensive**: each layer's count of `is None` checks, `X | None` in signatures, `isinstance`
   calls, `try` blocks, broad `except`s and suppressions (`noqa`, `pyright: ignore`) can't go up.
+  A `match` pattern on a built-in type (`case str(x)`, `case int()`) counts as an `isinstance`.
   Core is held at 0. Fix it by modelling the data so the check isn't needed (see Code shape). Don't
-  move code to another layer to dodge the count.
+  move code to another layer, or reword a check, to dodge the count.
 - **baseline**: a number in `quality-baseline.json` went up without an entry in `raises`. Only
   raise a number if the owner agrees, and record why:
   `{"date": "2026-10-17", "what": "allowed.core.try", "reason": "..."}`.
@@ -42,16 +43,27 @@ it.
 
 ## Code shape
 
+**The core idea: check at the edges, trust the types inside.** Anything from outside glance (data
+files, config, provider output, Windows calls, what the user types, agent suggestions) is checked
+once, where it comes in, and turned straight into our own frozen types. Anything that doesn't fit
+is rejected whole, with a clear reason. Past that point, code trusts its types and lets pyright
+catch mistakes: no re-checking, no `isinstance` or `is None` just in case, no defensive `try`.
+
+- **Let a library do the checking at the edges.** Untyped data (TOML, JSON) becomes our types
+  with one `msgspec.convert` or `msgspec.json.decode` call, not a chain of hand-written checks.
+- **Make bad states impossible to write down.** Absence is a state, not `None`: use an empty string
+  or tuple, or a type of its own (`Idle`). A parked task is `LeftOff` or `Waiting`, never both or
+  neither. Use tuples, not lists, in frozen types.
+- **Expected outcomes are values.** A rejected command or a file that can't be read is returned
+  (`Rejected`, `Problem`) and handled with `match`, which is for our own closed types.
 - **Layers.** `app/core` is pure logic: no I/O, UI, processes, network or clock (import-linter and
-  ruff enforce this). The rest of `app/` is the boundary (providers, store, MCP, agents, config,
-  Windows calls), which does the I/O and parsing. `glance.py` and `update_status.py` are entry
-  points: the only place for a broad `except` or `print`.
-- **Absence is a state, not `None`.** Use an empty string or tuple. Use a separate type when absence
-  means something: a waiting task always has `waiting_on: str`, an active task has no such field.
-- **Parse at the boundary.** Turn untrusted data (config, provider output, data files, MCP input,
-  agent suggestions) into frozen types once, and reject it whole if it's wrong. Code past the
-  boundary trusts its types and doesn't re-check them.
-- **Errors.** A provider catches its own failure and returns a result that says so. Everything else
-  propagates to the entry point's handler. No `try`/`except`/`pass`.
+  ruff enforce this). Pure text parsing, such as turning `tasks.md` into lists, belongs in core.
+  The rest of `app/` is the boundary (providers, store, config, Windows calls), which does the
+  I/O. `glance.py` and `update_status.py` are entry points: the only place for a broad `except`
+  or `print`.
+- **Errors.** A provider catches its own failure and returns a result that says so. In the new
+  app, everything else goes to the one error hook (`sys.excepthook`) that the app installs at
+  start-up: during start-up it shows the error and exits, after that it logs, shows the error and
+  keeps running. No other code catches. No `try`/`except`/`pass`.
 - **Small functions.** At most 5 arguments and 40 statements (ruff), plus the complexity gates.
 - **Tests.** Pass the clock in; never sleep or read the real time in tests.

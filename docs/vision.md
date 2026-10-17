@@ -75,8 +75,8 @@ The time side:
 | Quick | Small next actions with a rough size (`~3m`): follow-ups ("merge 1129"), admin, small reviews. I pick from it by "what fits in the time I have", not by priority. |
 
 Glance keeps its own files for these lists (see Data). Task titles stay short at work ("do ticket
-1135"); the detail lives in Jira, GitHub and so on. Adding a second Active task asks which one to
-park.
+1135"); the detail lives in Jira, GitHub and so on. Starting a new task parks the active one and
+says so.
 
 ## Steps
 
@@ -235,7 +235,7 @@ when needed.
 - Changes are batched over a couple of minutes, so the agent is woken once, not per item, with a cap
   on wake-ups per hour.
 - The watcher runs all the time in the background. It checks providers, runs the targeted watches,
-  and writes changes to `events.jsonl`, where the HUD picks them up.
+  and writes the changes to its own file, where the HUD picks them up.
 
 ## Layout
 
@@ -274,12 +274,13 @@ PC. The agent's notes about how I work are kept separately in each environment.
 
 Plain files on each machine, kept out of OneDrive-synced folders:
 
-- `state.json`: the lists (Active, Focus, Parked with notes, waiting-on reasons and links like
-  `pr:412` or `jira:1135`), steps, Quick items with sizes, and today's blocks. Saved safely (write a
-  temp file, then swap it in) under a lock, so glance and the MCP server can't damage it by writing
-  at the same time.
-- `events.jsonl`: a running log of what happened (started, parked, finished, check-in answered,
-  block moved). Gives undo, "what did I do today", and planned vs actual time.
+- `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps and Quick
+  items, as plain Markdown that I or an agent can read and edit. Glance rewrites it in a fixed
+  form after every command, saves it safely (write a temp file, then swap it in), refuses a file
+  it can't read rather than guessing, and notices when it was edited outside glance.
+- `events.log`: a running log of what happened (started, parked, finished, check-in answered,
+  block moved), one line per event, lined up in columns. Gives "what did I do today" and planned
+  vs actual time.
 - `notes.md`: the agent's notes on how I work. I can read and edit it.
 
 Todoist is read, never written. Tasks due today, and anything I capture on my phone (the Todoist
@@ -310,9 +311,10 @@ lists on my phone.
   timers, drop cards.
 - **Watcher** (Python): runs in the background, checks providers, finds changes, wakes the agent
   when needed.
-- **MCP server** (Python): owns the data files and enforces the rules. Tools for the lists, steps,
-  Quick items, today's blocks, the day snapshot, breaking down a task into steps, reading provider
-  data, and reading and adding to `notes.md`. Used by Copilot CLI at work and Claude CLI at home.
+- **MCP server** (Python, later): changes the lists through the same rules as the app. Tools for
+  the lists, steps, Quick items, today's blocks, the day snapshot, breaking down a task into steps,
+  reading provider data, and reading and adding to `notes.md`. Used by Copilot CLI at work and
+  Claude CLI at home.
 - **Agent connector**: sends a request to the agent the way the settings say (see appendix).
 - Tooling: ruff, pyright (strict), pytest.
 

@@ -42,6 +42,20 @@ DEFAULT_LAYERS = {
     "boundary": ["app/*"],
 }
 BROAD = {"Exception", "BaseException"}
+BUILTIN_TYPES = {
+    "bool",
+    "bytearray",
+    "bytes",
+    "complex",
+    "dict",
+    "float",
+    "frozenset",
+    "int",
+    "list",
+    "set",
+    "str",
+    "tuple",
+}
 
 
 @dataclass(frozen=True)
@@ -106,6 +120,15 @@ class _Walker(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         match node.func:
             case ast.Name(id="isinstance"):
+                self.add("isinstance", node)
+            case _:
+                pass
+        self.generic_visit(node)
+
+    def visit_MatchClass(self, node: ast.MatchClass) -> None:
+        """`case str(x)` is an isinstance check in other clothes, so it counts as one."""
+        match node.cls:
+            case ast.Name(id=name) if name in BUILTIN_TYPES:
                 self.add("isinstance", node)
             case _:
                 pass
@@ -237,7 +260,7 @@ def entry_point_imports(source: str, modules: set[str]) -> set[str]:
         match node:
             case ast.Import(names=names):
                 found |= {alias.name for alias in names}
-            case ast.ImportFrom(module=str(module), names=names):
+            case ast.ImportFrom(module=module, names=names) if module:
                 found |= _from_import(module, names, modules)
             case _:
                 pass

@@ -1,0 +1,93 @@
+"""Glance's settings, read once from the `[glance]` table of the TOML config file.
+
+```toml
+[glance]
+data_folder = ""          # empty: %LOCALAPPDATA%\\glance
+
+[glance.commands]
+park = ["park", "pause", "shelve", "defer"]
+```
+
+Every key has a default, and a missing file means all defaults. msgspec does the checking: any
+bad or unknown value under `[glance]` raises `msgspec.ValidationError` naming the key. The other
+tables in the file belong to the collector (`update_status.py`).
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Annotated
+
+import msgspec
+
+from app.core.model import CommandWords
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
+DEFAULT_WORDS = CommandWords()
+Word = Annotated[str, msgspec.Meta(pattern=r"^\S+\Z")]
+Words = Annotated[tuple[Word, ...], msgspec.Meta(min_length=1)]
+
+
+class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
+    new: Words = DEFAULT_WORDS.new
+    park: Words = DEFAULT_WORDS.park
+    wait: Words = DEFAULT_WORDS.wait
+    switch: Words = DEFAULT_WORDS.switch
+    done: Words = DEFAULT_WORDS.done
+
+    def groups(self) -> dict[str, tuple[str, ...]]:
+        """Each command's words, lower-cased."""
+        named = {
+            "new": self.new,
+            "park": self.park,
+            "wait": self.wait,
+            "switch": self.switch,
+            "done": self.done,
+        }
+        return {command: tuple(word.lower() for word in words) for command, words in named.items()}
+
+    def __post_init__(self) -> None:
+        """msgspec reports a ValueError raised here as a ValidationError, like any other."""
+        owner: dict[str, str] = {}
+        for command, words in self.groups().items():
+            for word in words:
+                first = owner.setdefault(word, command)
+                if first != command:
+                    raise ValueError(f"'{word}' is used by both {first} and {command}")
+
+
+class _Glance(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
+    data_folder: str = ""
+    commands: _Commands = msgspec.field(default_factory=_Commands)
+
+
+class _File(msgspec.Struct, frozen=True):
+    glance: _Glance = msgspec.field(default_factory=_Glance)
+
+
+@dataclass(frozen=True)
+class Settings:
+    data_folder: Path
+    words: CommandWords
+
+
+def load_settings(path: Path) -> Settings:
+    text = path.read_text(encoding="utf-8-sig") if path.exists() else ""
+    glance = msgspec.convert(tomllib.loads(text), _File).glance
+    words = CommandWords(**glance.commands.groups())
+    return Settings(_data_folder(glance.data_folder, path.parent), words)
+
+
+def _data_folder(value: str, config_folder: Path) -> Path:
+    """Empty means %LOCALAPPDATA%\\glance. A relative path is relative to the config file."""
+    if not value:
+        return Path(os.environ["LOCALAPPDATA"]) / "glance"
+    folder = Path(value).expanduser()
+    return folder if folder.is_absolute() else config_folder / folder
