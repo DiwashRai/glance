@@ -9,7 +9,10 @@ description = "A lightweight desktop renderer and status collector for glanceabl
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["notifications", "statusbar", "desktop", "tkinter"]
-dependencies = ['tomli; python_version < "3.11"']
+dependencies = [
+    "msgspec>=0.22.0",
+    'tomli; python_version < "3.11"',
+]
 
 [project.optional-dependencies]
 dev = ["complexipy==8.0.1", "grimp", "import-linter", "pyright", "pytest", "ruff"]
