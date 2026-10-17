@@ -7,9 +7,8 @@ with the full text in a tooltip.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QResizeEvent
-from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -22,26 +21,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.model import CommandWords, Idle, LeftOff, ParkedTask, Task, Waiting
-from app.ui import theme
-from app.ui.theme import font, restyle, styled
+from app.ui import icons, theme
+from app.ui.theme import font, label, restyle, styled
 
-FLAME = (
-    b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#f39c12"'
-    b' stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5'
-    b" 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3"
-    b' 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>'
-)
 PARKED_ROWS = 6  # shown in full; the rest are "+N more"
-ICON_SCALE = 3  # icons are drawn at 3x, so they stay sharp up to 300% display scaling
-
-
-def label(
-    text: str, role: str, size: int = 13, weight: QFont.Weight = QFont.Weight.Normal
-) -> QLabel:
-    widget = styled(QLabel(text), role)
-    widget.setFont(font(size, weight))
-    widget.setTextFormat(Qt.TextFormat.PlainText)
-    return widget
 
 
 def header(text: str, role: str = "header") -> QLabel:
@@ -90,7 +73,7 @@ class ActiveCard(QFrame):
         top.setContentsMargins(0, 0, 0, 0)
         top.setSpacing(8)
         flame = QLabel()
-        flame.setPixmap(_svg(FLAME, 14))
+        flame.setPixmap(icons.pixmap(icons.FLAME, theme.ORANGE, 14))
         top.addWidget(flame)
         top.addWidget(header("Active", "active-header"))
         top.addStretch()
@@ -199,7 +182,7 @@ def _marker(reason: LeftOff | Waiting) -> QPixmap:
         case LeftOff():
             pen = QPen(QColor(theme.GREY_RING), 1.5)
             pen.setDashPattern([2, 2])
-    pixmap = _blank(12)
+    pixmap = icons.blank(12)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(pen)
@@ -250,19 +233,3 @@ def hints(words: CommandWords) -> QWidget:
     )
     layout.addWidget(first_words, stretch=1)
     return row
-
-
-def _svg(svg: bytes, size: int) -> QPixmap:
-    pixmap = _blank(size)
-    painter = QPainter(pixmap)
-    QSvgRenderer(QByteArray(svg)).render(painter, QRectF(0, 0, size, size))
-    painter.end()
-    return pixmap
-
-
-def _blank(size: int) -> QPixmap:
-    """A transparent square, drawn at ICON_SCALE times the size so it stays sharp."""
-    pixmap = QPixmap(size * ICON_SCALE, size * ICON_SCALE)
-    pixmap.setDevicePixelRatio(ICON_SCALE)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    return pixmap

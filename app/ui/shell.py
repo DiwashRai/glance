@@ -1,21 +1,27 @@
-"""The window, the tray icon and Ctrl+Space, wired together."""
+"""The overlay window, the HUD on the taskbar, the tray icon and Ctrl+Space, wired together."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from app.controller import Controller
+from app.core.model import HudSettings
+from app.ui.hud import Hud
 from app.ui.window import Window
 from app.win32.hotkey import Hotkey
 
 
 class Shell:
-    def __init__(self, app: QApplication, controller: Controller) -> None:
+    def __init__(
+        self, app: QApplication, controller: Controller, hud: HudSettings, counts_file: Path
+    ) -> None:
         self.window = Window(controller)
+        self.hud = Hud(hud, lambda: controller.lists, counts_file, self.window.open)
         self.hotkey = Hotkey(self.window.toggle)
         self.tray = _tray(self.window)
         app.installNativeEventFilter(self.hotkey)
@@ -23,9 +29,11 @@ class Shell:
         app.setQuitOnLastWindowClosed(False)  # it lives in the tray; Ctrl+Space opens it
 
     def start(self) -> None:
-        """Registers Ctrl+Space (raising if another app has it) and shows the tray icon."""
+        """Registers Ctrl+Space (raising if another app has it), then shows the tray icon and the
+        HUD."""
         self.hotkey.register()
         self.tray.show()
+        self.hud.start()
 
 
 def _tray(window: Window) -> QSystemTrayIcon:

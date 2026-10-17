@@ -39,7 +39,9 @@ def run(app: QApplication, home: Path, argv: list[str]) -> int:
         raise AlreadyRunning("glance is already running")
     hook.log_to(settings.data_folder / "glance.log")
 
-    shell = Shell(app, Controller(Store(settings.data_folder), settings.words, _now))
+    controller = Controller(Store(settings.data_folder), settings.words, _now)
+    controller.open()  # so the HUD shows the active task before the overlay is first opened
+    shell = Shell(app, controller, settings.hud, settings.counts_file)
     shell.start()
     # Only now do errors go to the window: one during start-up (Ctrl+Space taken, say) must
     # reach the message box, not a hidden window.

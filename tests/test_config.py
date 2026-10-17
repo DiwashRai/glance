@@ -4,7 +4,7 @@ import msgspec
 import pytest
 
 from app.config import load_settings
-from app.core.model import CommandWords
+from app.core.model import CommandWords, HudSettings
 
 
 def write(tmp_path: Path, text: str) -> Path:
@@ -18,6 +18,8 @@ def test_a_missing_file_uses_the_defaults(tmp_path: Path, monkeypatch: pytest.Mo
     settings = load_settings(tmp_path / "missing.toml")
     assert settings.data_folder == tmp_path / "local" / "glance"
     assert settings.words == CommandWords()
+    assert settings.hud == HudSettings()
+    assert settings.counts_file == tmp_path / "data" / "status.local.json"
 
 
 def test_reads_glance_and_leaves_the_collectors_tables_alone(tmp_path: Path) -> None:
@@ -30,9 +32,15 @@ data_folder = "data"
 
 [glance.commands]
 park = ["Park", "Later"]
+
+[glance.hud]
+look = "box"
+show_active = false
 """
     settings = load_settings(write(tmp_path, text))
     assert settings.data_folder == tmp_path / "data"
+    assert settings.counts_file == tmp_path / "data" / "status.json"
+    assert settings.hud == HudSettings(look="box", show_active=False)
     assert settings.words.park == ("park", "later")
     assert settings.words.new == CommandWords().new
 
@@ -41,6 +49,7 @@ park = ["Park", "Later"]
     ("text", "error"),
     [
         ('[glance.commands]\npark = "park"\n', "$.glance.commands.park"),
+        ('[glance.hud]\nlook = "fancy"\n', "$.glance.hud.look"),
         ('[glance.commands]\npark = ["two words"]\n', "$.glance.commands.park"),
         ('[glance.commands]\nnew = ["x\\n"]\n', "$.glance.commands.new"),
         ("[glance]\ndata_dir = 'x'\n", "data_dir"),

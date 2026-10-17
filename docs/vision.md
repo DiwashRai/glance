@@ -10,7 +10,7 @@ Simplify aggressively. If a feature isn't clearly helping one of the problems be
 
 | Word | Meaning |
 |---|---|
-| HUD | The thin bar that is always on screen. Shows the active task and counts. |
+| HUD | The thin bar that is always on screen, on the taskbar by the tray. Shows the counts, and the active task unless I turn it off. |
 | Overlay | The bigger panel that opens with Ctrl+Space: a text box in the middle, lists around it. |
 | Drop card | A small card that springs out of the HUD to nudge me, with one-key answers. |
 | Agent | The AI assistant: Copilot CLI at work, Claude CLI at home. |
@@ -35,7 +35,7 @@ Simplify aggressively. If a feature isn't clearly helping one of the problems be
 
 ## Principles
 
-- **Works when forgotten.** The HUD is always there and needs no effort. The active task lives on it.
+- **Works when forgotten.** The HUD is always there and needs no effort. The active task can live on it.
 - **Assistant, not boss.** The agent gives its opinion and suggests. It never overrules me.
 - **Safe to put things away.** Anything parked is guaranteed to come back. Nothing silently
   disappears.
@@ -55,7 +55,7 @@ The priority side is read top to bottom: "can I do this right now? No? Next one.
 
 | List | Limit | What it holds |
 |---|---|---|
-| Active | 1 | What I'm working on right now. Always shown on the HUD. |
+| Active | 1 | What I'm working on right now. Shown on the HUD unless I turn that off. |
 | Focus | 1-2 | Important work, or work that makes other work easier. |
 | Parked | any | Tasks I've put away: paused or blocked. |
 

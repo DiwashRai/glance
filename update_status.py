@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 import time
 from collections.abc import Sequence
@@ -17,7 +18,16 @@ from app.providers.registry import provider_registry
 from app.status_format import format_status_payload
 from app.types import CountsRow, ProviderContext, StatusFile, TomlTable
 
-DEFAULT_CONFIG_PATH = "config.local.toml"
+HOME = Path(__file__).resolve().parent
+
+
+def default_config() -> Path:
+    """config.local.toml if it exists, else config.toml, next to this script: the same rule
+    glance uses, so both read the same settings."""
+    local = HOME / "config.local.toml"
+    return local if local.exists() else HOME / "config.toml"
+
+
 LOG_DIR = Path("logs")
 ALL_LOG_PATH = LOG_DIR / "update_status.log"
 ERROR_LOG_PATH = LOG_DIR / "update_status.error.log"
@@ -64,7 +74,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     parser = argparse.ArgumentParser(
         description="Collect provider counts and build a Glance status payload."
     )
-    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, type=Path)
+    parser.add_argument("--config", default=default_config(), type=Path)
     parser.add_argument(
         "--output",
         type=Path,
@@ -86,7 +96,7 @@ def load_config(config_path: Path) -> AppTomlConfig:
     with config_path.open("rb") as f:
         raw = tomllib.load(f)
 
-    return parse_toml_config(raw)
+    return parse_toml_config(raw, config_path.parent)
 
 
 def configure_logging() -> None:
@@ -124,7 +134,7 @@ def configure_logging() -> None:
     root_logger.addHandler(error_file_handler)
 
 
-def parse_toml_config(raw: dict[str, object]) -> AppTomlConfig:
+def parse_toml_config(raw: dict[str, object], folder: Path) -> AppTomlConfig:
     updater_raw = get_table(raw, "updater")
     providers_raw = get_table(raw, "providers")
     entries_raw = get_entries(raw)
@@ -142,7 +152,8 @@ def parse_toml_config(raw: dict[str, object]) -> AppTomlConfig:
     entries = [parse_entry(entry, i) for i, entry in enumerate(entries_raw)]
 
     return AppTomlConfig(
-        updater=UpdaterConfig(output_path=Path(output_path)),
+        # relative to the config file, as glance resolves it, so both find the same file
+        updater=UpdaterConfig(output_path=folder / output_path),
         providers=providers,
         entries=entries,
     )
@@ -298,7 +309,9 @@ def publish_status_output(content: str, output_path: Path):
         return
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(content, encoding="utf-8")
+    temp = output_path.with_name(f"{output_path.name}.tmp")
+    temp.write_text(content, encoding="utf-8")
+    os.replace(temp, output_path)  # atomic, so the HUD never reads half a file
 
 
 def main(argv: Sequence[str] | None = None):
