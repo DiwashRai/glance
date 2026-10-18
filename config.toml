@@ -15,7 +15,6 @@
 # step = ["step"]
 # skip = ["skip", ">"]
 # finish = ["finish"]
-# block = ["block"]
 # unblock = ["unblock"]
 
 # [glance.hud]              # the counts on the taskbar, just left of the tray

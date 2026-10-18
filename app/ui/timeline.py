@@ -26,7 +26,7 @@ _RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
 
 class TodayCard(QFrame):
-    def __init__(self, day: Day, plan_word: str) -> None:
+    def __init__(self, day: Day) -> None:
         super().__init__()
         styled(self, "card")
         self.setFixedWidth(300)
@@ -41,7 +41,7 @@ class TodayCard(QFrame):
         self.total = label("", "dim", 11)
         top.addWidget(self.total)
         layout.addLayout(top)
-        self.timeline = Timeline(day, plan_word)
+        self.timeline = Timeline(day)
         layout.addWidget(self.timeline, stretch=1)
         self.problem = label("", "dim", 12)  # why events.log can't be read: the plan still shows
         self.problem.setWordWrap(True)
@@ -72,10 +72,9 @@ class Scale:
 
 
 class Timeline(QWidget):
-    def __init__(self, day: Day, plan_word: str) -> None:
+    def __init__(self, day: Day) -> None:
         super().__init__()
         self.day = day
-        self.plan_word = plan_word  # the block command's first word
 
     def paintEvent(self, event: QPaintEvent) -> None:
         super().paintEvent(event)
@@ -95,7 +94,7 @@ class Timeline(QWidget):
                 self._bar(painter, scale, span)
         if not self.day.slots:  # how to plan, where the plan would go
             below = self._track(scale.y(self.day.now) + 6, self.height())
-            _label(painter, below, f"{self.plan_word} 14:00 1h <what>", theme.DIM)
+            _label(painter, below, "<what> 2pm for 1h", theme.DIM)
         self._now(painter, scale)
 
     def _hours(self, painter: QPainter, scale: Scale) -> None:

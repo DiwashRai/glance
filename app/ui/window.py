@@ -43,7 +43,7 @@ class Window(QWidget):
         self.focus = parts.FocusCard()
         self.parked = parts.parked_card()
         self.quick = parts.quick_card()
-        self.today = TodayCard(controller.day(), controller.words.block[0])
+        self.today = TodayCard(controller.day())
         self.active = parts.ActiveCard()
         self.prompt = parts.Prompt()
         self.message = parts.message_line()
@@ -57,6 +57,7 @@ class Window(QWidget):
         self.watch.setInterval(WATCH_MS)
         self.watch.timeout.connect(self._watch_keys)
         self.input.returnPressed.connect(self.run)
+        self.input.textChanged.connect(self._preview)
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.hide)
 
     def _lay_out(self, hints: QWidget) -> None:
@@ -165,6 +166,9 @@ class Window(QWidget):
         self.draw(view)
         self.controller.write_history()  # after drawing, so a failure here can't leave it stale
 
+    def _preview(self, text: str) -> None:
+        self.prompt.show_preview(self.controller.preview(text))
+
     def draw(self, view: View) -> None:
         self.active.show_active(view.lists.active)
         self.focus.show_focus(view.lists.focus)
@@ -172,6 +176,7 @@ class Window(QWidget):
         parts.show_quick(self.quick, view.lists.quick)
         self.today.show_day(self.controller.day())
         self._say(view.problem or view.message, _tone(view))
+        self._preview(self.input.text())  # the lists may have changed under what's typed
 
     def show_error(self, message: str) -> None:
         """Called by the error hook. Redraws from what the controller holds (which is saved) and

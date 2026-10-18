@@ -1,9 +1,11 @@
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from app.core.commands import Applied, Rejected, apply, parse_command
-from app.core.model import Block, CommandWords, Event, Lists, Plan
+from app.core.blocks import planned
+from app.core.commands import Applied, Ask, Preview, Rejected, apply, parse_command, preview
+from app.core.model import Block, CommandWords, Event, Lists, NoPlan, Plan, Task
 from app.core.tasks_md import Problem, parse, render
 
 NOW = datetime(2026, 10, 18, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
@@ -14,7 +16,11 @@ PLANNED = Lists(plan=Plan(TODAY, (DEEP, RUN)))
 
 
 def run(lists: Lists, text: str) -> Applied | Rejected:
-    return apply(lists, parse_command(text, CommandWords()), NOW)
+    match parse_command(text, CommandWords()):
+        case Ask():
+            pytest.fail("for the assistant")
+        case command:
+            return apply(lists, command, NOW)
 
 
 def applied(lists: Lists, text: str) -> Applied:
@@ -25,48 +31,148 @@ def applied(lists: Lists, text: str) -> Applied:
             pytest.fail(f"rejected: {reason}")
 
 
-def test_block_adds_to_todays_plan_in_time_order_by_end_or_length() -> None:
-    result = applied(Lists(plan=Plan(TODAY, (RUN,))), "block 14:00-15:30 deep work")
+@pytest.mark.parametrize(
+    ("text", "block"),
+    [
+        ("deep work 2pm for 1h30m", DEEP),
+        ("deep work for 90m 2pm", DEEP),  # either order
+        ("deep work at 2pm for 90m", DEEP),
+        ("deep work for 90m at 2pm", DEEP),
+        ("standup 10 for 15m", Block(time(10), time(10, 15), "standup")),  # the next 10
+        ("standup 9 for 15m", Block(time(21), time(21, 15), "standup")),  # 9:00 has gone
+        ("review 9am for 30m", Block(time(9), time(9, 30), "review")),  # gone, but it said am
+        ("lunch 12 for 1h", Block(time(12), time(13), "lunch")),
+        ("early 09:00 for 30m", Block(time(9), time(9, 30), "early")),
+        ("gym 18:30 for 1h", Block(time(18, 30), time(19, 30), "gym")),
+        ("run 5:30PM for 1h !", RUN),
+        ("run 5:30pm for 1h!!", RUN),
+        # a name can't end in a lone !: tasks.md would read it as must
+        ("run !! 5:30pm for 1h", RUN),
+        ("ship it! 4pm for 1h", Block(time(16), time(17), "ship it!")),
+        # it reads back from tasks.md as a name, not a length
+        ("30m review 2pm for 1h", Block(time(14), time(15), "30m review")),
+    ],
+)
+def test_a_line_ending_in_a_time_and_a_length_is_a_block(text: str, block: Block) -> None:
+    result = applied(Lists(), text)
+    assert result.lists.plan == Plan(TODAY, (block,))
+    assert parse(render(result.lists)) == result.lists
+
+
+def test_a_block_is_planned_not_started() -> None:
+    result = applied(Lists(plan=Plan(TODAY, (RUN,))), "deep work 2pm for 90m")
     assert result.lists.plan == Plan(TODAY, (DEEP, RUN))
     assert result.events == (Event(NOW, "planned", "deep work", "14:00-15:30"),)
     assert result.message == "planned deep work 14:00-15:30"
-    assert applied(Lists(), "block 17:30 1h run !").message == (
+    assert applied(Lists(), "run 5:30pm for 1h !").message == (
         "planned run 17:30-18:30 · must happen today"
     )
-    assert applied(Lists(), "block 9:05 1h30m ship it!").lists.plan == Plan(
-        TODAY, (Block(time(9, 5), time(10, 35), "ship it!"),)
+
+
+@pytest.mark.parametrize("text", ["call dentist 3pm", "dinner for 4 tonight"])
+def test_without_a_time_and_a_length_its_a_task(text: str) -> None:
+    assert applied(Lists(), text).lists == Lists(Task(text))
+
+
+def test_a_long_run_of_digits_is_read_quickly() -> None:
+    """It's read on each key press, and a pattern can take seconds on one."""
+    text = f"x 2pm for {'1' * 20000}x"
+    assert preview(text, CommandWords(), Lists(), NOW) == Preview()
+
+
+def deep(start: time, end: time) -> Block:
+    return Block(start, end, "deep work")
+
+
+@pytest.mark.parametrize(
+    ("text", "left", "said"),
+    [
+        (
+            "call 2:30pm for 30m",
+            (deep(time(14), time(14, 30)), deep(time(15), time(15, 30))),
+            "deep work now 14:00-14:30 and 15:00-15:30",
+        ),
+        ("call 3pm for 1h", (deep(time(14), time(15)),), "deep work now 14:00-15:00"),
+        ("call 1pm for 1h30m", (deep(time(14, 30), time(15, 30)),), "deep work now 14:30-15:30"),
+        ("planning 1:30pm for 3h", (), "removed deep work 14:00-15:30"),
+        # the same name is cut back like any other: blocks are never merged or moved
+        ("Deep work 2pm for 1h", (deep(time(15), time(15, 30)),), "deep work now 15:00-15:30"),
+    ],
+)
+def test_a_newer_block_cuts_back_the_ones_it_lands_on(
+    text: str, left: tuple[Block, ...], said: str
+) -> None:
+    result = applied(Lists(plan=Plan(TODAY, (DEEP,))), text)
+    assert tuple(b for b in planned(result.lists.plan, TODAY) if b.what == "deep work") == left
+    assert result.message.endswith(f" · {said}")
+
+
+def test_a_block_split_in_two_is_unblocked_by_number() -> None:
+    split = applied(PLANNED, "call 2:30pm for 30m").lists
+    assert run(split, "unblock deep") == Rejected(
+        "'deep' matches 2: 1 deep work 14:00-14:30, 3 deep work 15:00-15:30"
     )
+    call = Block(time(14, 30), time(15), "call")
+    assert planned(applied(split, "unblock 3").lists.plan, TODAY)[1:] == (call, RUN)
 
 
 def test_a_block_on_a_stale_plan_starts_todays() -> None:
     stale = Lists(plan=Plan(date(2026, 10, 17), (DEEP,)))
-    assert applied(stale, "block 14:30 1h review").lists.plan == Plan(
-        TODAY, (Block(time(14, 30), time(15, 30), "review"),)
-    )
-    assert applied(stale, "block 9:00 1h x").message.endswith("replaces the plan for 2026-10-17")
+    result = applied(stale, "review 2:30pm for 1h")
+    assert result.lists.plan == Plan(TODAY, (Block(time(14, 30), time(15, 30), "review"),))
+    assert result.message.endswith("replaces the plan for 2026-10-17")
     assert run(stale, "unblock 1") == Rejected("nothing is planned today")
 
 
 @pytest.mark.parametrize(
     ("text", "reason"),
     [
-        ("block", "block when? 14:00 1h deep work, or 14:00-15:30 PR reviews"),
-        ("block deep work", "a block starts with its time"),
-        ("block 14:00 deep work", "how long? an end or a length"),
-        ("block 14:00 1h", "what's the block for?"),
-        ("block 15:00-14:00 x", "a block ends after it starts, before midnight"),
-        ("block 23:30 1h x", "a block ends before midnight: 23:59 at the latest"),
-        # saved as 14:00-15:00 30m review, it would read back as an end and a length
-        ("block 14:00 1h 30m review", "the name can't start with a length"),
-        ("block 15:00 1h review", "that overlaps 14:00-15:30 deep work"),
+        ("lunch for 1h", "what time? like 2pm or 14:30"),
+        ("for 1h", "what time?"),
+        ("deep work 13pm for 1h", "what time?"),
+        ("deep work 2pm for 0m", "how long? like for 1h or 90m"),
+        # anything like a length is a block that's refused, not a task that parks Active
+        ("deep work 2pm for 90", "how long?"),
+        ("deep work 2pm for 100h", "how long?"),
+        ("deep work 2pm for -1.2345678901h", "how long?"),
+        ("lunch for 2hours noon", "what time?"),
+        ("deep work 2pm for 30minutes", "how long?"),
+        ("deep work 2pm for 1h 30m", "write the length as one word, like 1h30m"),
+        ("deep work 2pm for 2 hours", "write the length as one word"),
+        ("! 2pm for 1h", "what's the block for?"),
+        ("x 9 for 3h", "from 21:00, that runs past 23:59"),
+        ("call 6pm for 1h", "run must happen: unblock it first"),
     ],
 )
-def test_block_refuses_what_it_cant_plan(text: str, reason: str) -> None:
+def test_a_block_glance_cant_plan_is_refused_not_made_a_task(text: str, reason: str) -> None:
     match run(PLANNED, text):
         case Rejected(reason=said):
             assert said.startswith(reason)
         case Applied():
             pytest.fail("expected a refusal")
+
+
+@pytest.mark.parametrize(
+    ("text", "shown"),
+    [
+        ("deep work 8am for 1h !", Preview(((10, 13), (14, 17), (18, 20), (21, 22)))),
+        ("call for 30m 2:30pm", Preview(((5, 8), (9, 12), (13, 19)), "trims deep work")),
+        (
+            "plan at 1pm for 3h!",
+            Preview(((5, 7), (8, 11), (12, 15), (16, 18), (18, 19)), "replaces deep work"),
+        ),
+        (
+            "call 6pm for 1h",
+            Preview(((5, 8), (9, 12), (13, 15)), "run must happen: unblock it first"),
+        ),
+        ("lunch for 1h", Preview(note="what time? like 2pm or 14:30")),
+        ("call dentist 3pm", Preview()),
+        ("wait for Sam 3pm for 1h", Preview(((0, 4),))),  # the command word wins
+        (" what's next?", Preview(assistant=True)),
+    ],
+)
+def test_preview_marks_what_glance_picked_up(text: str, shown: Preview) -> None:
+    assert replace(preview(text, CommandWords(), PLANNED, NOW), plan=NoPlan()) == shown
 
 
 def test_unblock_by_number_in_time_order_or_by_name() -> None:
@@ -97,6 +203,7 @@ def test_todays_plan_round_trips_in_tasks_md() -> None:
         ("# Today 2026-02-30\n", 1, "2026-02-30 isn't a real date"),
         ("# Today 2026-10-18\n# Today 2026-10-18\n", 2, "'# Today' appears twice"),
         ("# Today 2026-10-18\n- deep work\n", 2, "a block starts with its time"),
+        # by hand, an overlap is a mistake: it isn't cut back like a typed block
         ("# Today 2026-10-18\n- 14:00-15:00 a\n- 14:30 1h b\n", 3, "that overlaps 14:00-15:00 a"),
         ("# Today 2026-10-18\n- 14:00 1h a\n  left off: x\n", 3, "a block can't have a note"),
     ],

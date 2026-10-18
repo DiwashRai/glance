@@ -168,7 +168,7 @@ class Block:
     start: time
     end: time
     what: str
-    must: bool = False  # it must happen today: moved, never dropped
+    must: bool = False  # it must happen today: a newer block never cuts it
 
 
 @dataclass(frozen=True)
@@ -240,5 +240,4 @@ class CommandWords:
     step: tuple[str, ...] = ("step",)
     skip: tuple[str, ...] = ("skip", ">")
     finish: tuple[str, ...] = ("finish",)
-    block: tuple[str, ...] = ("block",)
     unblock: tuple[str, ...] = ("unblock",)

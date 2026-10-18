@@ -36,6 +36,34 @@ def test_a_rejection_changes_nothing_and_keeps_the_text(tmp_path: Path) -> None:
     assert not (tmp_path / "tasks.md").exists()
 
 
+def test_a_line_for_the_assistant_is_cleared_and_does_nothing(tmp_path: Path) -> None:
+    glance = controller(tmp_path)
+    glance.open()
+    assert glance.run(" done") == View(Lists(), accepted=True)
+    assert glance.run("   ") == View(Lists(), accepted=True)
+    assert not (tmp_path / "tasks.md").exists()
+
+
+def test_a_line_that_means_something_else_by_enter_isnt_run(tmp_path: Path) -> None:
+    """At 08:59 `9` is 09:00, but at 09:01 it's 21:00: Enter mustn't cut a block the preview
+    didn't mean, even when the note reads the same."""
+    plan = f"# Today {NOW.date().isoformat()}\n- 09:00-10:00 deep\n- 21:00-22:00 deep\n"
+    (tmp_path / "tasks.md").write_text(plan, encoding="utf-8")
+    clock = [NOW.replace(hour=8, minute=59)]
+    glance = Controller(Store(tmp_path), CommandWords(), lambda: clock[0])
+    glance.open()
+    assert glance.preview("review 9 for 1h").note == "replaces deep"
+    clock[0] = NOW.replace(hour=9, minute=1)
+    view = glance.run("review 9 for 1h")
+    assert view.message.startswith("it's 09:01 now, which changes what that does")
+    assert glance.preview("review 9 for 1h").note == "replaces deep"
+    assert glance.run("review 9 for 1h").message.endswith("removed deep 21:00-22:00")
+    clock[0] = NOW.replace(hour=23, minute=59)
+    glance.preview("x 2pm for 1h")
+    clock[0] += timedelta(minutes=2)  # tomorrow: a block then, not the one today it showed
+    assert glance.run("x 2pm for 1h").message.startswith("it's 00:01 now")
+
+
 def test_a_failed_save_leaves_memory_unchanged(tmp_path: Path) -> None:
     glance = controller(tmp_path)
     glance.open()
@@ -80,7 +108,7 @@ def test_an_unreadable_file_refuses_commands_until_fixed(
 def test_todays_blocks_are_put_on_the_clock(tmp_path: Path) -> None:
     glance = controller(tmp_path)
     glance.open()
-    glance.run("block 14:00 1h deep work")
+    glance.run("deep work 2pm for 1h")
     (slot,) = glance.day().slots
     assert (slot.number, slot.block.what, slot.start.hour) == (1, "deep work", 14)
     assert slot.end - slot.start == timedelta(hours=1)
