@@ -32,6 +32,7 @@ BLUE = "#5dade2"
 RED = "#e74c3c"
 GREY_RING = "#a0a0a3"
 GREEN = "#58d68d"  # all clear
+BACKDROP_DIM = 0.6  # how dark the screen behind the overlay goes, 0 to 1
 
 # The HUD on the taskbar (canvas boards W1 to W9)
 HUD_TEXT_LIGHT = "#1b1b1d"  # text on a light taskbar
@@ -81,9 +82,9 @@ def restyle(widget: QWidget, name: str, value: str) -> None:
 
 STYLESHEET = f"""
 QWidget {{ color: {TEXT}; }}
-QFrame[role="panel"] {{
-    background: {BACKGROUND}; border: 1px solid {BORDER}; border-radius: 18px;
-}}
+/* almost invisible, not clear, so a click between the cards stays with the overlay. The alpha is
+   out of 255: Qt reads 1 or less as a fraction, so rgba(0, 0, 0, 1) would be solid black */
+QFrame[role="panel"] {{ background: rgba(0, 0, 0, 2); border: none; }}
 QFrame[role="card"] {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 14px; }}
 QFrame[role="active"] {{
     background: {ACTIVE_CARD}; border: 1px solid {ORANGE}; border-radius: 14px;

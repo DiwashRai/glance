@@ -1,5 +1,6 @@
 """The overlay, laid out as board F: Focus above Parked on the left; Active, the prompt, the
 message line and the key hints in the middle; Quick on the right, where Today joins it later.
+The cards float over the screen, which is dimmed behind them.
 
 Ctrl+Space opens it to type; held, it's a peek that hides when the keys are let go. Ctrl+Space
 again, Esc, or clicking anywhere else, hides it. It only talks to the controller.
@@ -7,9 +8,11 @@ again, Esc, or clicking anywhere else, hides it. It only talks to the controller
 
 from __future__ import annotations
 
-from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer
-from PySide6.QtGui import QCursor, QGuiApplication, QHideEvent, QKeySequence, QShortcut
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from collections.abc import Callable
+
+from PySide6.QtCore import QElapsedTimer, QEvent, QRect, QSize, Qt, QTimer
+from PySide6.QtGui import QCursor, QGuiApplication, QHideEvent, QKeySequence, QMouseEvent, QShortcut
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from app.controller import Controller, View
 from app.ui import parts, theme
@@ -31,9 +34,10 @@ class Window(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool  # no taskbar button
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)  # for the rounded panel
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)  # the cards float
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)  # a peek leaves the focus
         self.setStyleSheet(theme.STYLESHEET)
+        self.backdrop = Backdrop(self.hide)
 
         self.focus = parts.FocusCard()
         self.parked = parts.parked_card()
@@ -54,11 +58,17 @@ class Window(QWidget):
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.hide)
 
     def _lay_out(self, hints: QWidget) -> None:
-        middle = QVBoxLayout()
-        middle.setSpacing(12)
-        middle.addStretch()
+        centre = styled(QFrame(), "card")  # Active, the prompt, the message and the hints
+        inside = QVBoxLayout(centre)
+        inside.setContentsMargins(20, 20, 20, 16)
+        inside.setSpacing(12)
         for widget in (self.active, self.prompt, self.message, hints):
-            middle.addWidget(widget)
+            inside.addWidget(widget)
+        # As tall as everything it holds, measured once styled; it never grows or shrinks
+        centre.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        middle = QVBoxLayout()
+        middle.addStretch()
+        middle.addWidget(centre)
         middle.addStretch()
         panel = styled(QFrame(), "panel")
         columns = QHBoxLayout(panel)
@@ -113,6 +123,7 @@ class Window(QWidget):
         area = (QGuiApplication.screenAt(QCursor.pos()) or self.screen()).availableGeometry()
         self.setFixedSize(SIZE.boundedTo(area.size()))  # never jumps; smaller on a small screen
         self.move(area.center() - self.rect().center())
+        self.backdrop.cover(area)
         self.show()
         self.raise_()
 
@@ -135,10 +146,11 @@ class Window(QWidget):
             self.hide()
 
     def hideEvent(self, event: QHideEvent) -> None:
-        """However it hides, the last press is over."""
+        """However it hides, the last press is over, and the screen behind is undimmed."""
         super().hideEvent(event)
         self.watch.stop()
         self.focusing = False
+        self.backdrop.hide()
 
     def run(self) -> None:
         view = self.controller.run(self.input.text())
@@ -160,11 +172,43 @@ class Window(QWidget):
         self.draw(View(self.controller.lists))
         self._say(f"error: {message}", "error")
         self.watch.stop()  # an error turns a peek into a window that stays
+        self.backdrop.cover(self.screen().availableGeometry())
         self.show()
+        self.raise_()
 
     def _say(self, text: str, tone: str) -> None:
         self.message.setText(text)
         theme.restyle(self.message, "tone", tone)
+
+
+class Backdrop(QWidget):
+    """The screen behind the overlay, dimmed, so the cards float over it. It never takes the
+    focus, and a click on it closes the overlay, however the overlay was opened. The taskbar
+    (with the HUD) isn't dimmed. Nothing runs while it's up."""
+
+    def __init__(self, clicked: Callable[[], None]) -> None:
+        super().__init__()
+        self.clicked = clicked
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool  # no taskbar button
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setStyleSheet("background: black;")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.setWindowOpacity(theme.BACKDROP_DIM)
+
+    def cover(self, area: QRect) -> None:
+        """Shown over `area`, under the overlay (which is shown after it)."""
+        self.setGeometry(area)
+        self.show()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """On release, not press, so the release can't land on the app underneath."""
+        super().mouseReleaseEvent(event)
+        self.clicked()
 
 
 def _tone(view: View) -> str:
