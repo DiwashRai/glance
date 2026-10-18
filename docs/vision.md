@@ -260,8 +260,9 @@ https://claude.ai/artifact/74pBpUYyeYhkLdDXNPL8yX. The nudge prototypes are on t
   out of place. This needs a lot of tuning (timing, easing, bounce, maybe sound) once there's a real
   version, and it's worth the effort.
 - Both side columns have the same fixed height. Parked shows as many recent items as fit. Quick
-  shows the top few plus "+N more". Today shows about 1 hour back and 5 hours ahead, stretched to
-  fill the space, with later events listed underneath.
+  shows the top few plus "+N more". Today shows 1 hour back and 3 hours ahead, stretched to fill
+  the space (any more and a half-hour bar is too thin to label), with later events listed
+  underneath.
 - Ctrl+Space opens it (taking over from Todoist quick add). The more often I open it, the more
   natural it is for nudges to show up there.
 

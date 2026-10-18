@@ -271,7 +271,7 @@ def test_quick_adds_smallest_first_with_unsized_last() -> None:
 def test_done_ticks_off_a_quick_item_without_making_it_active() -> None:
     result = applied(QUICK_DAY, "done q1")
     assert result.lists == replace(QUICK_DAY, quick=(REPLY,))
-    assert result.events == (Event(NOW, "finished", "merge 1129"),)
+    assert result.events == (Event(NOW, "crossed", "merge 1129"),)
 
 
 def test_a_quick_item_switched_to_goes_back_to_quick_unless_it_gains_a_note() -> None:

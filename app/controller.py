@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
 
+from app.core import today
 from app.core.commands import Applied, Rejected, apply, parse_command
 from app.core.model import CommandWords, Event, Lists
 from app.store import NO_FILE, Snapshot, Store, Unreadable
@@ -35,10 +36,13 @@ class Controller:
         self.lists = Lists()
         self.stamp = NO_FILE
         self.problem = ""
-        self.history: tuple[Event, ...] = ()
+        self.history: tuple[Event, ...] = ()  # the last change's, until they're written
+        self.log: today.Log = today.NOTHING_YET  # events.log as last read, plus what's since
 
     def open(self) -> View:
-        """Read tasks.md again: it may have been edited since the window was last shown."""
+        """Read tasks.md and events.log again: either may have changed since the window was
+        last shown."""
+        self.log = self.store.history()
         match self.store.load():
             case Snapshot(lists=lists, stamp=stamp):
                 self.lists, self.stamp, self.problem = lists, stamp, ""
@@ -62,9 +66,22 @@ class Controller:
                 self.stamp = self.store.save(lists)
                 self.lists = lists
                 self.history = events
+                self.log = today.logged(self.log, events)
                 return View(lists, message, accepted=True)
+
+    def day(self) -> today.Day:
+        """What I've been on today, up to now. If writing the history fails, this shows the
+        last change until the next open re-reads events.log."""
+        now = self.now()
+        return today.day(self.log, now, _midnight(now), self.lists.active)
 
     def write_history(self) -> None:
         """Append the last change's events to events.log."""
         events, self.history = self.history, ()
         self.store.append(events)
+
+
+def _midnight(now: datetime) -> datetime:
+    """The start of now's day, with the UTC offset it had then, which isn't now's on the day
+    the clocks change. That takes the zone's rules, so it's worked out here, not in core."""
+    return datetime.combine(now.date(), time()).astimezone()

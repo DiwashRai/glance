@@ -175,6 +175,7 @@ EventKind = Literal[
     "waiting",
     "resumed",
     "finished",
+    "crossed",  # a Quick item ticked off without starting it
     "focused",
     "unfocused",
     "added",

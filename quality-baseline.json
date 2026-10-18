@@ -75,8 +75,8 @@
   "cyclomatic_exceptions": {},
   "module_exceptions": {},
   "budget": {
-    "stage": 3,
-    "start_lines": 2291,
+    "stage": 4,
+    "start_lines": 2993,
     "max_new_lines": 1000
   },
   "raises": [
@@ -89,6 +89,11 @@
       "date": "2026-10-17",
       "what": "budget.stage, budget.start_lines, budget.max_new_lines",
       "reason": "Start stage 3 (the rest of the overlay: Focus, Quick, steps, hold-to-peek, the tactile pass). Stage 2 ended at +51 of 600 on glance-v2, so start_lines moves to its end (2240 + 51). Stage 3 gets 1000: five PRs, two of them UI-heavy."
+    },
+    {
+      "date": "2026-10-18",
+      "what": "budget.stage, budget.start_lines",
+      "reason": "Start stage 4 (time: the Today timeline first, then check-ins, coming back, planning). Stage 3 ended at +702 of 1000 on glance-v2 (the tactile pass was cut), so start_lines moves to its end (2291 + 702). Stage 4 keeps 1000."
     }
   ]
 }

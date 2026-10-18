@@ -5,6 +5,7 @@ import pytest
 
 from app.controller import Controller, View
 from app.core.model import CommandWords, Idle, Lists, Task
+from app.core.today import Span
 from app.store import Store
 
 NOW = datetime(2026, 10, 17, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
@@ -21,8 +22,11 @@ def test_a_command_is_saved_then_shown_then_logged(tmp_path: Path) -> None:
     assert view == View(Lists(Task("fix the build"), ()), "started fix the build", accepted=True)
     assert controller(tmp_path).open().lists == view.lists  # saved: a fresh start sees it
     assert not (tmp_path / "events.log").exists()  # history is written after drawing
+    assert glance.day().spans == (Span("fix the build", NOW, NOW, going=True),)  # already
     glance.write_history()
     assert (tmp_path / "events.log").read_text(encoding="utf-8").count("\n") == 1
+    glance.open()  # read back from events.log, not counted twice
+    assert glance.day().spans == (Span("fix the build", NOW, NOW, going=True),)
 
 
 def test_a_rejection_changes_nothing_and_keeps_the_text(tmp_path: Path) -> None:
