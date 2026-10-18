@@ -11,12 +11,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.core import tasks_md
+from app.core import events_log, tasks_md
+from app.core.events_log import History
 from app.core.model import Event, Lists
 from app.core.tasks_md import Problem
 
 TASKS_FILE = "tasks.md"
 EVENTS_FILE = "events.log"
+# How much of the end of events.log is read: about two months, parsed in under 10 ms. A task
+# still active from before that (or a day of more than about 3000 events) loses its start.
+EVENTS_TAIL = 256 * 1024
 
 
 @dataclass(frozen=True)
@@ -84,18 +88,24 @@ class Store:
             return
         self.folder.mkdir(parents=True, exist_ok=True)
         with self.events_path.open("a", encoding="utf-8", newline="\n") as file:
-            file.writelines(f"{event_line(event)}\n" for event in events)
+            file.writelines(f"{events_log.line(event)}\n" for event in events)
+
+    def history(self) -> History | Problem:
+        """What events.log says happened lately, oldest first: its last whole lines, so it
+        stays quick however long the log gets. No file yet means nothing has happened."""
+        if not self.events_path.exists():
+            return History()
+        data = self.events_path.read_bytes()
+        cut = data.rfind(b"\n", 0, max(len(data) - EVENTS_TAIL, 0)) + 1  # 0 for a short log
+        first = data.count(b"\n", 0, cut) + 1
+        text = data[cut:].decode("utf-8-sig", errors="replace")
+        if "�" in text:
+            problem = _not_utf8(text)
+            return Problem(problem.line + first - 1, problem.message)
+        return events_log.parse(text, first)
 
 
 def _not_utf8(text: str) -> Problem:
     """Bytes that aren't UTF-8 decode to U+FFFD; point at the first one."""
     line = text[: text.index("�")].count("\n") + 1
     return Problem(line, "this isn't UTF-8 text: save the file as UTF-8")
-
-
-def event_line(event: Event) -> str:
-    """`2026-10-17 09:58:40+01:00  parked     Do ticket 1234 · left off: retry loop`"""
-    at = event.at.isoformat(sep=" ", timespec="seconds")
-    title = event.title.replace(" · ", " - ")
-    detail = f" · {event.detail}" if event.detail else ""
-    return f"{at}  {event.kind:<9}  {title}{detail}"

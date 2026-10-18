@@ -306,7 +306,8 @@ def _tick(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
         case _Picked(index=index):
             task = lists.quick[index]
             ticked = replace(lists, quick=_without(lists.quick, index))
-            return Applied(ticked, (Event(now, "finished", task.title),), f"finished {shown(task)}")
+            crossed = Event(now, "crossed", task.title)  # not "finished": Active carries on
+            return Applied(ticked, (crossed,), f"finished {shown(task)}")
 
 
 def _quick(lists: Lists, text: str, now: datetime) -> Applied | Rejected:

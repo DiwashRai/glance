@@ -1,5 +1,5 @@
 """The overlay, laid out as board F: Focus above Parked on the left; Active, the prompt, the
-message line and the key hints in the middle; Quick on the right, where Today joins it later.
+message line and the key hints in the middle; Today above Quick on the right.
 The cards float over the screen, which is dimmed behind them.
 
 Ctrl+Space opens it to type; held, it's a peek that hides when the keys are let go. Ctrl+Space
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWi
 from app.controller import Controller, View
 from app.ui import parts, theme
 from app.ui.theme import styled
+from app.ui.timeline import TodayCard
 from app.win32.hotkey import held
 
 SIZE = QSize(1380, 480)  # board F's proportions
@@ -42,6 +43,7 @@ class Window(QWidget):
         self.focus = parts.FocusCard()
         self.parked = parts.parked_card()
         self.quick = parts.quick_card()
+        self.today = TodayCard(controller.day())
         self.active = parts.ActiveCard()
         self.prompt = parts.Prompt()
         self.message = parts.message_line()
@@ -80,7 +82,11 @@ class Window(QWidget):
         left.addWidget(self.parked, stretch=1)
         columns.addLayout(left)
         columns.addLayout(middle, stretch=1)
-        columns.addWidget(self.quick)
+        right = QVBoxLayout()
+        right.setSpacing(16)
+        right.addWidget(self.today, stretch=2)
+        right.addWidget(self.quick, stretch=1)  # the top few, then "+N more"
+        columns.addLayout(right)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(panel)
@@ -164,6 +170,7 @@ class Window(QWidget):
         self.focus.show_focus(view.lists.focus)
         parts.show_parked(self.parked, view.lists.parked)
         parts.show_quick(self.quick, view.lists.quick)
+        self.today.show_day(self.controller.day())
         self._say(view.problem or view.message, _tone(view))
 
     def show_error(self, message: str) -> None:
