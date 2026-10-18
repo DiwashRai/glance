@@ -65,5 +65,11 @@ catch mistakes: no re-checking, no `isinstance` or `is None` just in case, no de
   app, everything else goes to the one error hook (`sys.excepthook`) that the app installs at
   start-up: during start-up it shows the error and exits, after that it logs, shows the error and
   keeps running. No other code catches. No `try`/`except`/`pass`.
+- **Typed input is a small, strict grammar.** What a typed line means is a table of word patterns
+  (`blocks.SHAPES`) and lookups (`NAMED_TIMES`), not branches. A line that doesn't fit exactly
+  is a task; the input colours the words it picked up, so nothing else is needed to show it. Add
+  a pattern or a word only when the owner asks for it. Don't add a rule, message or regex for an
+  input nobody would type (a fuzzer's `-1.5h`): only fix what breaks a saved file, crashes,
+  freezes or quietly changes data.
 - **Small functions.** At most 5 arguments and 40 statements (ruff), plus the complexity gates.
 - **Tests.** Pass the clock in; never sleep or read the real time in tests.
