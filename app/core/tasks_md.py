@@ -18,6 +18,10 @@
 # Quick
 - merge 1129 ~3m
 - reply to Sam
+
+# Today 2026-10-18
+- 14:00-15:30 deep work
+- 17:30-18:30 run !
 ```
 
 A file that doesn't fit is refused whole, with the line number, rather than guessed at.
@@ -28,13 +32,17 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, replace
 
+from app.core import blocks
 from app.core.model import (
     FOCUS_SLOTS,
+    Block,
     FromQuick,
     Idle,
     LeftOff,
     Lists,
+    NoPlan,
     ParkedTask,
+    Plan,
     Step,
     StepState,
     Task,
@@ -45,11 +53,20 @@ from app.core.model import (
 )
 
 HEADINGS = {"# Active": "active", "# Focus": "focus", "# Parked": "parked", "# Quick": "quick"}
+TODAY = "# Today"  # with its date: # Today 2026-10-18
 WAITING_ON = "waiting on:"
 LEFT_OFF = "left off:"
 HOME_QUICK = "home: quick"  # under the active task: it came from Quick, and goes back there
-NO_NOTES = {"focus": "a focus can't have a note", "quick": "a quick item can't have a note"}
-NO_STEPS = {"focus": "a focus can't have steps", "quick": "a quick item can't have steps"}
+NO_NOTES = {
+    "focus": "a focus can't have a note",
+    "quick": "a quick item can't have a note",
+    "today": "a block can't have a note",
+}
+NO_STEPS = {
+    "focus": "a focus can't have steps",
+    "quick": "a quick item can't have steps",
+    "today": "a block can't have steps",
+}
 STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
 MARKS: dict[str, StepState] = {" ": "open", "x": "done", "X": "done", ">": "skipped", "-": "left"}
 BOXES: dict[StepState, str] = {"open": " ", "done": "x", "skipped": ">", "left": "-"}
@@ -75,6 +92,11 @@ def render(lists: Lists) -> str:
         lines.append(_task_line(parked.task))
         lines += [*_note_lines(parked.reason), *_step_lines(parked.task)]
     lines += ["", "# Quick", *(_task_line(task) for task in lists.quick)]
+    match lists.plan:
+        case Plan(day=day, blocks=planned):
+            lines += ["", f"{TODAY} {day.isoformat()}", *(f"- {blocks.text(b)}" for b in planned)]
+        case NoPlan():
+            pass
     return "\n".join(lines) + "\n"
 
 
@@ -117,11 +139,12 @@ class _Reader:
         self.parked: list[ParkedTask] = []
         self.focus: list[str] = []
         self.quick: list[Task] = []
+        self.plan: Plan | NoPlan = NoPlan()
         self.noted = False  # the last task already has its note
 
     def lists(self) -> Lists:
         quick = smallest_first(tuple(self.quick))
-        return Lists(self.active, tuple(self.parked), tuple(self.focus), quick)
+        return Lists(self.active, tuple(self.parked), tuple(self.focus), quick, self.plan)
 
     def feed(self, line: str) -> str:
         if not line:
@@ -149,6 +172,8 @@ class _Reader:
         return self._step(text)
 
     def _heading(self, line: str) -> str:
+        if line == TODAY or line.startswith(f"{TODAY} "):
+            return self._today(line[len(TODAY) :].strip())
         section = HEADINGS.get(line, "")
         if not section:
             return f"unknown heading '{line}'"
@@ -156,6 +181,18 @@ class _Reader:
             return f"'{line}' appears twice"
         self.seen.add(section)
         self.section = section
+        return ""
+
+    def _today(self, text: str) -> str:
+        if "today" in self.seen:
+            return f"'{TODAY}' appears twice"
+        match blocks.day(text):
+            case blocks.Refused(why=why):
+                return why
+            case day:
+                self.plan = Plan(day)
+        self.seen.add("today")
+        self.section = "today"
         return ""
 
     def _task(self, text: str) -> str:
@@ -169,6 +206,8 @@ class _Reader:
                 self.quick.append(sized(text))
             case "focus":
                 return self._focus(text)
+            case "today":
+                return self._block(text)
             case _:
                 return self._active(text)
         return ""
@@ -180,6 +219,24 @@ class _Reader:
                 return ""
             case Task() | FromQuick():
                 return "only one task can be active"
+
+    def _block(self, text: str) -> str:
+        """In time order or not, but never overlapping."""
+        match self.plan, blocks.read(text):
+            case _, blocks.Refused(why=why):
+                return why
+            case Plan(day=day), Block() as block:
+                return self._planned(blocks.add(self.plan, block, day))
+            case NoPlan(), _:
+                return "a block goes under a Today heading"
+
+    def _planned(self, plan: Plan | blocks.Refused) -> str:
+        match plan:
+            case blocks.Refused(why=why):
+                return why
+            case Plan():
+                self.plan = plan
+                return ""
 
     def _focus(self, text: str) -> str:
         if len(self.focus) >= FOCUS_SLOTS:

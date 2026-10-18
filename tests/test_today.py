@@ -80,6 +80,6 @@ def test_log_lines_read_back_as_the_events_written_from_a_day_on() -> None:
 def test_a_line_that_does_not_fit_refuses_the_log(line: str, message: str) -> None:
     text = f"2026-10-18 08:00:00+01:00  started  ok\n{line}\n"
     assert events_log.parse(text) == Problem(2, message)
-    assert day(Problem(2, message), at("10:00"), at("00:00"), Idle()) == Day(
+    assert day(Problem(2, message), at("10:00"), at("00:00"), Idle(), ()) == Day(
         at("10:00"), at("00:00"), problem=f"events.log line 2: {message}"
     )

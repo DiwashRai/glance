@@ -1,5 +1,6 @@
-"""The Today card: an hour scale from an hour ago to three hours ahead, a bar for each stretch on a
-task (orange for the one I'm on), and a line at now. Planned blocks and meetings join it later.
+"""The Today card: an hour scale from an hour ago to three hours ahead, today's planned blocks as
+quiet outlines, a bar for each stretch on a task (orange for the one I'm on) drawn over them, and a
+line at now. Meetings join it later.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
-from app.core.today import Day, Span, duration_text, total
+from app.core.today import Day, Slot, Span, duration_text, total
 from app.ui import theme
 from app.ui.parts import header
 from app.ui.theme import font, label, styled
@@ -20,6 +21,7 @@ BACK = timedelta(hours=1)  # how far back the scale starts
 AHEAD = timedelta(hours=3)  # and how far ahead: any more and a half-hour is too thin to label
 GUTTER = 44  # room for the hour labels, left of the bars
 EDGE = 8  # so the top and bottom hour labels aren't cut in half
+INSET = 6  # a bar sits this far inside a block, so the block's edges show around it
 _RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
 
@@ -41,6 +43,10 @@ class TodayCard(QFrame):
         layout.addLayout(top)
         self.timeline = Timeline(day)
         layout.addWidget(self.timeline, stretch=1)
+        self.problem = label("", "dim", 12)  # why events.log can't be read: the plan still shows
+        self.problem.setWordWrap(True)
+        theme.restyle(self.problem, "tone", "error")
+        layout.addWidget(self.problem)
         self.show_day(day)
 
     def show_day(self, day: Day) -> None:
@@ -49,6 +55,8 @@ class TodayCard(QFrame):
         self.total.setText(f"{duration_text(on_tasks)} on tasks" if shown else "")
         self.timeline.day = day
         self.timeline.update()
+        self.problem.setText(day.problem)
+        self.problem.setVisible(bool(day.problem))
 
 
 @dataclass(frozen=True)
@@ -72,18 +80,22 @@ class Timeline(QWidget):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        if self.day.problem:
-            painter.setPen(QColor(theme.RED))
-            painter.setFont(font(12))
-            painter.drawText(self.rect(), Qt.TextFlag.TextWordWrap, self.day.problem)
-        elif self.height() > 4 * EDGE:  # room for a scale at all
-            scale = Scale(self.day.now - BACK, self.day.now + AHEAD, self.height())
-            self._hours(painter, scale)
-            for span in self.day.spans:
-                if span.end > scale.start:
-                    self._bar(painter, scale, span)
-            self._now(painter, scale)
+        if self.height() > 4 * EDGE:  # room for a scale at all
+            self._scale(painter, Scale(self.day.now - BACK, self.day.now + AHEAD, self.height()))
         painter.end()
+
+    def _scale(self, painter: QPainter, scale: Scale) -> None:
+        self._hours(painter, scale)
+        for slot in self.day.slots:
+            if slot.end > scale.start and slot.start < scale.end:
+                self._block(painter, scale, slot)
+        for span in self.day.spans:
+            if span.end > scale.start:
+                self._bar(painter, scale, span)
+        if not self.day.slots:  # how to plan, where the plan would go
+            below = self._track(scale.y(self.day.now) + 6, self.height())
+            _label(painter, below, "<what> 2pm for 1h", theme.DIM)
+        self._now(painter, scale)
 
     def _hours(self, painter: QPainter, scale: Scale) -> None:
         """Each whole hour on the scale: its time, and a faint line across."""
@@ -100,25 +112,41 @@ class Timeline(QWidget):
             painter.setPen(QPen(QColor(theme.BORDER), 1))
             painter.drawLine(QPointF(GUTTER, y), QPointF(self.width(), y))
 
+    def _track(self, top: float, bottom: float, inset: float = 0) -> QRectF:
+        """Across the scale, right of the hour labels. Half a pixel in from the right, so a 1px
+        border isn't cut in half there."""
+        left, right = GUTTER + 4 + inset, self.width() - 0.5 - inset
+        return QRectF(left, top, right - left, max(bottom - top, 2))
+
+    def _block(self, painter: QPainter, scale: Scale, slot: Slot) -> None:
+        """Drawn to its real times, so one running off the scale doesn't look as if it ends at
+        the edge. Its number and name go at the top of what's still to come of it, so the block
+        I'm in stays named below the now line."""
+        top = scale.y(max(slot.start, scale.start))
+        block = self._track(scale.y(slot.start), scale.y(slot.end))
+        tint = QColor(theme.BLUE)
+        tint.setAlpha(24)
+        edge = QColor(theme.BLUE)
+        edge.setAlpha(150)
+        painter.setPen(QPen(edge, 1))
+        painter.setBrush(tint)
+        painter.drawRoundedRect(block, 6, 6)
+        must = " !" if slot.block.must else ""
+        label_top = max(top, scale.y(self.day.now)) + 2
+        bottom = min(block.bottom(), self.height())  # only what's on the card has room for it
+        named = QRectF(block.left(), label_top, block.width(), bottom - label_top)
+        _label(painter, named, f"{slot.number}  {slot.block.what}", theme.BLUE, must)
+
     def _bar(self, painter: QPainter, scale: Scale, span: Span) -> None:
         """The title goes in the bar when there's room for it."""
         top = scale.y(max(span.start, scale.start))
-        # Inset half a pixel, so the 1px border isn't cut in half at the right edge
-        right = self.width() - 0.5
-        bar = QRectF(GUTTER + 4, top, right - GUTTER - 4, max(scale.y(span.end) - top, 2))
-        edge, fill = (theme.ORANGE, theme.ACTIVE_CARD) if span.going else (theme.DIM, theme.PROMPT)
+        bar = self._track(top, scale.y(span.end), INSET)
+        going = (theme.ORANGE, theme.ACTIVE_CARD, theme.BRIGHT)
+        edge, fill, words = going if span.going else (theme.DIM, theme.PROMPT, theme.TEXT)
         painter.setPen(QPen(QColor(edge), 1))
         painter.setBrush(QColor(fill))
         painter.drawRoundedRect(bar, 4, 4)
-        painter.setFont(font(11))
-        lines = painter.fontMetrics().lineSpacing()
-        if bar.height() >= lines + 2:
-            text = bar.adjusted(8, 1, -6, 0)
-            title = painter.fontMetrics().elidedText(
-                span.title, Qt.TextElideMode.ElideRight, int(text.width())
-            )
-            painter.setPen(QColor(theme.BRIGHT if span.going else theme.TEXT))
-            painter.drawText(text, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, title)
+        _label(painter, bar.adjusted(0, 1, 0, 0), span.title, words)
 
     def _now(self, painter: QPainter, scale: Scale) -> None:
         y = scale.y(self.day.now)
@@ -126,3 +154,17 @@ class Timeline(QWidget):
         painter.drawLine(QPointF(GUTTER, y), QPointF(self.width(), y))
         painter.setBrush(QColor(theme.BLUE))
         painter.drawEllipse(QPointF(GUTTER, y), 3, 3)
+
+
+def _label(painter: QPainter, room: QRectF, text: str, colour: str, keep: str = "") -> None:
+    """One line at the top left of `room`, ending in "…" if it's too long, and left out if
+    there isn't a line's height. `keep` goes on the end even when the text is cut short."""
+    painter.setFont(font(11))
+    metrics = painter.fontMetrics()
+    if room.height() < metrics.lineSpacing() + 1:
+        return
+    line = room.adjusted(8, 0, -6, 0)
+    width = int(line.width()) - metrics.horizontalAdvance(keep)
+    shown = metrics.elidedText(text, Qt.TextElideMode.ElideRight, width) + keep
+    painter.setPen(QColor(colour))
+    painter.drawText(line, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, shown)

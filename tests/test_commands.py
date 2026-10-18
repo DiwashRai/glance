@@ -6,6 +6,7 @@ import pytest
 from app.core.commands import (
     AddStep,
     Applied,
+    Ask,
     Command,
     Done,
     Finish,
@@ -16,8 +17,8 @@ from app.core.commands import (
     Rejected,
     Skip,
     Switch,
+    Typed,
     Unfocus,
-    Unknown,
     Wait,
     apply,
     parse_command,
@@ -47,7 +48,11 @@ IDLE_DAY = Lists(Idle(), (WAITING, LEFT))
 
 
 def run(lists: Lists, text: str) -> Applied | Rejected:
-    return apply(lists, parse_command(text, WORDS), NOW)
+    match parse_command(text, WORDS):
+        case Ask():
+            pytest.fail("for the assistant")
+        case command:
+            return apply(lists, command, NOW)
 
 
 def applied(lists: Lists, text: str) -> Applied:
@@ -76,11 +81,10 @@ def applied(lists: Lists, text: str) -> Applied:
         ("step rerun CI", AddStep("rerun CI")),
         (">", Skip()),
         ("finish", Finish()),
-        ("hello there", Unknown("hello")),
-        ("   ", Unknown("")),
+        ("hello there", Typed("hello there")),
     ],
 )
-def test_parses_the_first_word(text: str, command: Command) -> None:
+def test_parses_the_first_word(text: str, command: Command | Ask) -> None:
     assert parse_command(text, WORDS) == command
 
 
@@ -94,7 +98,7 @@ def test_line_breaks_become_one_space_so_tasks_md_reads_back(text: str) -> None:
 def test_words_come_from_settings() -> None:
     words = CommandWords(park=("later",))
     assert parse_command("later notes", words) == Park("notes")
-    assert parse_command("park notes", words) == Unknown("park")
+    assert parse_command("park notes", words) == Typed("park notes")
 
 
 @pytest.mark.parametrize(
@@ -113,6 +117,7 @@ def test_new_starts_a_task_and_parks_the_active_one(
 ) -> None:
     result = applied(lists, "new fix the build")
     assert result.lists == Lists(Task("fix the build"), parked)
+    assert applied(lists, "fix  the build").lists == result.lists  # no command word: new
     assert result.events[-1] == Event(NOW, "started", "fix the build")
     assert result.message == message
 
@@ -222,7 +227,8 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
     [
         (Lists(), "park", "nothing is active"),
         (Lists(), "done", "nothing is active"),
-        (DAY, "new", "new needs a title"),
+        (DAY, "new", "a task needs a title"),
+        (DAY, "~5m", "a task needs a title"),
         (DAY, "wait", "wait on what?"),
         (DAY, "switch", "switch to what?"),
         (DAY, "s nope", "no task matches 'nope'"),
@@ -248,8 +254,6 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "skip", "no steps to skip · step <text> adds one"),
         (DAY, "skip it", "skip moves past the current step: type just skip"),
         (DAY, "finish now", "finish finishes the active task: type just finish"),
-        (DAY, "hello", "not a command: hello"),
-        (DAY, "", "type a command"),
     ],
 )
 def test_rejections_say_why_and_change_nothing(lists: Lists, text: str, reason: str) -> None:

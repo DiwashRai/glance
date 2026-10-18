@@ -12,21 +12,24 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TypeVar
 
-from app.core import steps
+from app.core import blocks, steps
 from app.core.model import (
     FOCUS_SLOTS,
     AllDone,
     BackTo,
+    Block,
     CommandWords,
     Event,
     FromQuick,
     Idle,
     LeftOff,
     Lists,
+    NoPlan,
     NoSteps,
     OnlyLeft,
     OnStep,
     ParkedTask,
+    Plan,
     Task,
     Waiting,
     shown,
@@ -95,12 +98,39 @@ class Finish:
 
 
 @dataclass(frozen=True)
-class Unknown:
-    word: str
+class Unblock:
+    query: str
+
+
+@dataclass(frozen=True)
+class Typed:
+    """No command word: a block if it ends in a time and a length, else a new task. The text is
+    as it was typed, so the words picked up from it can be shown where they are."""
+
+    text: str
+
+
+@dataclass(frozen=True)
+class Ask:
+    """A line starting with a space is for the assistant, which isn't built yet."""
+
+    text: str
 
 
 Command = (
-    New | Park | Wait | Switch | Done | Focus | Unfocus | Quick | AddStep | Skip | Finish | Unknown
+    New
+    | Park
+    | Wait
+    | Switch
+    | Done
+    | Focus
+    | Unfocus
+    | Quick
+    | AddStep
+    | Skip
+    | Finish
+    | Unblock
+    | Typed
 )
 
 
@@ -116,12 +146,26 @@ class Rejected:
     reason: str
 
 
-def parse_command(text: str, words: CommandWords) -> Command:
-    """The first word decides, case-insensitively. The rest is the argument.
+@dataclass(frozen=True)
+class Preview:
+    """What a line will do, worked out as it's typed: where the words glance picked up from it
+    are, as (start, end) indexes, and a short note."""
+
+    marks: tuple[tuple[int, int], ...] = ()
+    note: str = ""
+    assistant: bool = False  # it's for the assistant
+    plan: Plan | NoPlan = NoPlan()  # as it would be: not shown, but Enter checks it's the same
+
+
+def parse_command(text: str, words: CommandWords) -> Command | Ask:
+    """A command word first decides, case-insensitively, and the rest is the argument. With no
+    command word, it's `Typed`; with a space first, it's for the assistant.
 
     Any run of whitespace in the argument, line breaks included, becomes one space, so a title or
     note is always a single line and `tasks.md` can always be read back.
     """
+    if text.startswith(" "):
+        return Ask(text[1:])
     first, *rest = text.split(maxsplit=1) or [""]
     word = first.lower()
     argument = " ".join(rest[0].split()) if rest else ""
@@ -137,21 +181,51 @@ def parse_command(text: str, words: CommandWords) -> Command:
         (words.step, AddStep),
         (words.skip, Skip),
         (words.finish, Finish),
+        (words.unblock, Unblock),
     )
     for command_words, command in commands:
         if word in command_words:
             return command(argument)
-    return Unknown(first)
+    return Typed(text)
+
+
+def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Preview:
+    """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
+    the command before it runs. A block's time, length and `!` are marked, with what it cuts."""
+    match parse_command(text, words):
+        case Ask():
+            return Preview(assistant=True)
+        case Typed():
+            return _preview_block(lists, text, now)
+        case _:
+            return Preview(tuple(word.span() for word in blocks.WORD.finditer(text))[:1])
+
+
+def _preview_block(lists: Lists, text: str, now: datetime) -> Preview:
+    match blocks.typed(text, now.time()):
+        case blocks.NotABlock():
+            return Preview()
+        case blocks.Refused(why=why):
+            return Preview(note=why)
+        case blocks.Found(block=block, marks=marks):
+            match blocks.place(lists.plan, block, now.date()):
+                case blocks.Refused(why=why):
+                    return Preview(marks, why)
+                case blocks.Placed(plan=plan, cut=cut):
+                    note = ", ".join(_cut_note(old, left) for old, left in cut)
+                    return Preview(marks, note, plan=plan)
+
+
+def _cut_note(old: Block, left: tuple[Block, ...]) -> str:
+    return f"{'trims' if left else 'replaces'} {old.what}"
 
 
 def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
     match command:
         case New(title=title):
             return _new(lists, title, now)
-        case Park(note=note):
-            return _park(lists, LeftOff(note), now)
-        case Wait(on=on):
-            return _park(lists, Waiting(on), now) if on else Rejected("wait on what?")
+        case Park() | Wait():
+            return _away(lists, command, now)
         case Switch(query=query):
             return _switch(lists, query, now)
         case Done(query=query):
@@ -162,8 +236,10 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _step_command(lists, command, now)
         case Quick(text=text):
             return _quick(lists, text, now)
-        case Unknown(word=word):
-            return Rejected(f"not a command: {word}" if word else "type a command")
+        case Typed(text=text):
+            return _typed(lists, text, now)
+        case Unblock(query=query):
+            return _unblock(lists, query, now)
 
 
 def _set_aside(
@@ -209,10 +285,20 @@ def _and(said: str) -> str:
 def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
     task = sized(title)
     if not task.title:
-        return Rejected("new needs a title")
+        return Rejected("a task needs a title")
     aside, events, said = _set_aside(lists, LeftOff(), now)
     events = (*events, Event(now, "started", task.title))
     return Applied(replace(aside, active=task), events, f"started {shown(task)}{_and(said)}")
+
+
+def _away(lists: Lists, command: Park | Wait, now: datetime) -> Applied | Rejected:
+    match command:
+        case Park(note=note):
+            return _park(lists, LeftOff(note), now)
+        case Wait(on=""):
+            return Rejected("wait on what?")
+        case Wait(on=on):
+            return _park(lists, Waiting(on), now)
 
 
 def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | Rejected:
@@ -470,3 +556,67 @@ def _unfocus(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
                 (Event(now, "unfocused", text),),
                 f"unfocused {text}",
             )
+
+
+def _typed(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
+    match blocks.typed(text, now.time()):
+        case blocks.NotABlock():
+            return _new(lists, " ".join(text.split()), now)
+        case blocks.Refused(why=why):
+            return Rejected(why)
+        case blocks.Found(block=block):
+            return _place(lists, block, now)
+
+
+def _place(lists: Lists, block: Block, now: datetime) -> Applied | Rejected:
+    match blocks.place(lists.plan, block, now.date()):
+        case blocks.Refused(why=why):
+            return Rejected(why)
+        case blocks.Placed(plan=plan, cut=cut):
+            event = Event(now, "planned", block.what, blocks.times(block))
+            cuts = "".join(_cut(old, left) for old, left in cut)
+            said = f"planned {_said(block)}{cuts}{_replaced(lists.plan, now)}"
+            return Applied(replace(lists, plan=plan), (event,), said)
+
+
+def _cut(old: Block, left: tuple[Block, ...]) -> str:
+    """` · deep work now 14:00-15:00 and 16:00-17:00`, or ` · removed review 15:00-15:30`."""
+    if not left:
+        return f" · removed {old.what} {blocks.times(old)}"
+    return f" · {old.what} now {' and '.join(blocks.times(piece) for piece in left)}"
+
+
+def _replaced(plan: Plan | NoPlan, now: datetime) -> str:
+    """A stale plan with blocks in it goes when today's starts, so say so."""
+    match plan:
+        case Plan(day=day, blocks=old) if old and day != now.date():
+            return f" · replaces the plan for {day.isoformat()}"
+        case Plan() | NoPlan():
+            return ""
+
+
+def _said(block: Block) -> str:
+    """`deep work 14:00-15:30`, and whether it must happen."""
+    must = " · must happen today" if block.must else ""
+    return f"{block.what} {blocks.times(block)}{must}"
+
+
+def _unblock(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
+    """By its number in time order, or its name, like unfocus. Its times go with its name, so
+    when two share a name, the choice says which is which: `1 deep work 09:00-11:00`."""
+    planned = blocks.planned(lists.plan, now.date())
+    if not query:
+        return Rejected("unblock which? its number or name")
+    if not planned:
+        return Rejected("nothing is planned today")
+    refusal = f"no block today matches '{query}'"
+    names = _numbered(f"{block.what} {blocks.times(block)}" for block in planned)
+    picked = _row(query, len(names), refusal) if _is_number(query) else _pick(names, query, refusal)
+    match picked:
+        case Rejected() as rejected:
+            return rejected
+        case _Picked(index=index):
+            block = planned[index]
+            plan = Plan(now.date(), _without(planned, index))
+            event = Event(now, "unplanned", block.what, blocks.times(block))
+            return Applied(replace(lists, plan=plan), (event,), f"unblocked {_said(block)}")

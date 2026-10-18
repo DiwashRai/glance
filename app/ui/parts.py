@@ -9,8 +9,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QResizeEvent
+from PySide6.QtCore import QCoreApplication, QPointF, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QInputMethodEvent,
+    QPainter,
+    QPen,
+    QPixmap,
+    QResizeEvent,
+    QTextCharFormat,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -22,6 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.commands import Preview
 from app.core.model import (
     FOCUS_SLOTS,
     CommandWords,
@@ -313,8 +323,12 @@ def _marker(reason: LeftOff | Waiting) -> QPixmap:
     return pixmap
 
 
+NOTE_WIDTH = 260
+
+
 class Prompt(QFrame):
-    """The text box, with board F's blue `›`."""
+    """The text box, with board F's blue `›`. As I type, the words glance picked up are blue, and
+    a note on the right says what else will happen. Its `›` turns yellow for the assistant."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -322,11 +336,46 @@ class Prompt(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 13, 20, 13)
         layout.setSpacing(14)
-        layout.addWidget(label("›", "prompt-mark", 22))
+        self.mark = label("›", "prompt-mark", 22)
+        layout.addWidget(self.mark)
         self.input = QLineEdit()
         self.input.setFont(font(20))
         self.input.setPlaceholderText("what's going on?")
-        layout.addWidget(self.input)
+        layout.addWidget(self.input, stretch=1)
+        self.note = label("", "dim", 13)
+        layout.addWidget(self.note)
+
+    def show_preview(self, preview: Preview) -> None:
+        """The note never takes more than NOTE_WIDTH, so what's typed keeps its room."""
+        note = "assistant" if preview.assistant else preview.note
+        fitted = self.note.fontMetrics().elidedText(note, Qt.TextElideMode.ElideRight, NOTE_WIDTH)
+        self.note.setText(fitted)
+        restyle(self.mark, "tone", "assistant" if preview.assistant else "")
+        _colour(self.input, preview.marks)
+
+
+def _colour(box: QLineEdit, marks: tuple[tuple[int, int], ...]) -> None:
+    """Qt colours part of a line edit's text the way an input method does: formats placed
+    relative to the cursor, sent in an event that changes no text."""
+    text = box.text()
+    cursor = box.cursorPosition()
+    picked = QTextCharFormat()
+    picked.setForeground(QColor(theme.BLUE))
+    formats = [
+        QInputMethodEvent.Attribute(
+            QInputMethodEvent.AttributeType.TextFormat,
+            _utf16(text, start) - cursor,
+            _utf16(text, end) - _utf16(text, start),
+            picked,
+        )
+        for start, end in marks
+    ]
+    QCoreApplication.sendEvent(box, QInputMethodEvent("", formats))
+
+
+def _utf16(text: str, index: int) -> int:
+    """Where Python's `index` is in Qt's count, which is in UTF-16 units: an emoji is two."""
+    return len(text[:index].encode("utf-16-le", "surrogatepass")) // 2  # half an emoji, pasted
 
 
 def message_line() -> QLabel:
@@ -353,7 +402,6 @@ def hints(words: CommandWords) -> QWidget:
     commands = (
         words.park,
         words.switch,
-        words.new,
         words.done,
         words.wait,
         words.focus,

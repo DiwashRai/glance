@@ -42,6 +42,7 @@ class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     step: Words = DEFAULT_WORDS.step
     skip: Words = DEFAULT_WORDS.skip
     finish: Words = DEFAULT_WORDS.finish
+    unblock: Words = DEFAULT_WORDS.unblock
 
     def groups(self) -> dict[str, tuple[str, ...]]:
         """Each command's words, lower-cased."""

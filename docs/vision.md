@@ -98,14 +98,16 @@ says so.
 
 ## Commands and keys
 
-Typed into the overlay's text box. The first word decides; anything else goes to the agent.
+Typed into the overlay's text box. A command word first decides. With none, a line ending in a
+time and a length is a block, and anything else is a new task. A line starting with a space goes
+to the agent. As I type, the words glance picked up are coloured, so I can see what it will do.
 
 | Command | Does |
 |---|---|
 | `park <note>` (also `pause`, `shelve`, `defer`) | Park the active task with a "left off" note |
 | `wait <reason>` | Park the active task as blocked on something |
 | `switch <name>` (or `s`) | Make a parked task active; the current one is parked |
-| `new <title>` (or `+`) | Start a new task; the current one is parked |
+| `<title>`, or `new <title>` (or `+`) | Start a new task; the current one is parked |
 | `done` (or `d`) | Finish the current step, or the task if it has no steps. `done q2` ticks off a Quick item without starting it |
 | `skip` (or `>`) | Skip the current step; skipped steps come back round once |
 | `finish` | Finish the active task now, whatever its steps |
@@ -113,6 +115,8 @@ Typed into the overlay's text box. The first word decides; anything else goes to
 | `quick <text>` (or `q`) | Add a Quick item, with an optional size at the end (`~3m`, `~1h`). Switching to one (`s q2`) and parking it puts it back in Quick; parking it with a note or as waiting makes it a parked task |
 | `focus <text>` | Add to Focus, if a slot is free |
 | `unfocus <name or number>` | Take something out of Focus |
+| `<what> <time> for <length>` | Plan a block today: `deep work 2pm for 2h`, or `call for 30m 9` (the next 9 o'clock). `!` at the end marks it must-happen. It cuts back any block it lands on, except a must-happen one |
+| `unblock <name or number>` | Take a block off today's plan |
 
 Keys in the overlay and on drop cards:
 
@@ -178,7 +182,9 @@ The agent helps plan the day, and glance keeps the plan honest as the day goes.
 
 - **Two kinds of block.** Fixed: meetings from the calendar; glance never moves them. Flexible: my
   own blocks (deep work, PR reviews, a run), which can move. A flexible block can be marked "must
-  happen today" (the run), so it gets moved rather than dropped.
+  happen today" (the run), so it gets moved rather than dropped. Blocks only move when I say so
+  (`extend`, or accepting a card); a block I type cuts back the ones it lands on, but never a
+  must-happen one.
 - **Running over is spotted by plain code.** Five minutes before a block ends, the "ends in 5m"
   nudge appears. If the end time passes and I'm still on the same task, an overrun drop card offers:
   wrap up in 5 minutes, push the next block by 30 minutes, or move it to the next free slot that
@@ -282,8 +288,9 @@ PC. The agent's notes about how I work are kept separately in each environment.
 
 Plain files on each machine, kept out of OneDrive-synced folders:
 
-- `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps and Quick
-  items, as plain Markdown that I or an agent can read and edit. Glance rewrites it in a fixed
+- `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps, Quick
+  items and today's planned blocks (under `# Today 2026-10-18`; another day's are ignored), as
+  plain Markdown that I or an agent can read and edit. Glance rewrites it in a fixed
   form after every command, saves it safely (write a temp file, then swap it in), refuses a file
   it can't read rather than guessing, and notices when it was edited outside glance.
 - `events.log`: a running log of what happened (started, parked, finished, check-in answered,
