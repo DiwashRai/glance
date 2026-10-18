@@ -11,6 +11,7 @@ import calendar
 import re
 from dataclasses import dataclass, replace
 from datetime import date, time
+from typing import Literal
 
 from app.core.model import Block, NoPlan, Plan
 
@@ -20,19 +21,18 @@ LENGTH = re.compile(r"(?:([0-9]{1,2})h)?(?:([0-9]{1,3})m)?", re.ASCII)
 SAID = re.compile(r"([0-9]{1,2})(?::([0-5][0-9]))?(am|pm)?", re.ASCII)  # 2pm, 9:30, 14:00
 DAY = re.compile(r"([1-9][0-9]{3})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])", re.ASCII)
 WORD = re.compile(r"\S+")
-# 1h, 90, 1.5h, -1h, 2hrs, 1h30: like a length, so a block, if not one glance can read. Each
-# digit can only be read one way, so a long run of them is quick to turn down.
-HOURS = ("h", "hr", "hrs", "hour", "hours")
-MINUTES = ("m", "min", "mins", "minute", "minutes")
-UNITS = (*HOURS, *MINUTES)
-LIKE_LENGTH = re.compile(
-    rf"[-+.]?\d+(?:[.,]\d+)*"  # a number
-    rf"(?:(?:{'|'.join(HOURS)})(?:\d+(?:{'|'.join(MINUTES)})?)?|{'|'.join(MINUTES)})?"  # 1h30m
-)
 MUST = "!"
 EXAMPLE = "14:00 1h deep work, or 14:00-15:30 PR reviews"  # as tasks.md has them
-WHEN = "what time? like 2pm or 14:30"  # short: it's shown beside the text box as I type
-ONE_WORD = "write the length as one word, like 1h30m"
+
+Kind = Literal["time", "for", "length", "other"]
+
+# How a typed line ends when it's a block, word by word. Anything else is a task: the words
+# picked up turn blue as I type, so one that isn't blue says it won't be read.
+SHAPES: tuple[tuple[Kind, ...], ...] = (
+    ("time", "for", "length"),  # deep work 2pm for 2h
+    ("for", "length", "time"),  # deep work for 2h 2pm
+)
+NAMED_TIMES = {"noon": time(12), "evening": time(19)}
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,7 @@ class Refused:
 @dataclass(frozen=True)
 class Found:
     """A block found in a typed line, and where the words glance picked up for it are in the
-    text (its time, `for` and length, an `at`, a `!`), as (start, end) indexes."""
+    text (its time, `for` and length, and `!`), as (start, end) indexes."""
 
     block: Block
     marks: tuple[tuple[int, int], ...]
@@ -51,7 +51,7 @@ class Found:
 
 @dataclass(frozen=True)
 class NotABlock:
-    """It doesn't end in `for` and a length: it's a task."""
+    """It doesn't end like a block: it's a task."""
 
 
 @dataclass(frozen=True)
@@ -63,141 +63,62 @@ class Placed:
 
 
 def typed(text: str, now: time) -> Found | NotABlock | Refused:
-    """`deep work 2pm for 2h`, `deep work at 2pm for 2h` or `deep work for 2h 2pm`, then `!` if
-    it must happen. Ending in `for` and something like a length makes it a block, so a bad time
-    or length is refused, not made into a task."""
-    words = _words(text)
-    bang = tuple(word for word in words[-1:] if not word.text.strip(MUST))
-    match _parts(words[: len(words) - len(bang)]):
-        case _Parts() as parts:
-            return _found(parts, bang, now)
-        case NotABlock() | Refused() as other:
-            return other
-
-
-@dataclass(frozen=True)
-class _Word:
-    text: str
-    start: int
-    end: int
-
-
-def _words(text: str) -> tuple[_Word, ...]:
-    """Each word and where it is. `!`s stuck to the last word are a `!` of their own (`1h!`); a
-    line that turns out to be a task keeps its text as typed."""
-    words = [_Word(found[0], found.start(), found.end()) for found in WORD.finditer(text)]
-    stuck = [word for word in words[-1:] if word.text.rstrip(MUST) not in ("", word.text)]
-    apart = [piece for word in stuck for piece in _unstuck(word)]
-    return (*words[: len(words) - len(stuck)], *apart)
-
-
-def _unstuck(word: _Word) -> tuple[_Word, _Word]:
-    body = word.text.rstrip(MUST)
-    split = word.start + len(body)
-    return _Word(body, word.start, split), _Word(MUST, split, word.end)
-
-
-@dataclass(frozen=True)
-class _Parts:
-    name: tuple[_Word, ...]
-    clock: _Word
-    length: tuple[_Word, _Word]  # `for` and the length
-    at: tuple[_Word, ...] = ()  # `at` before the time
-
-
-def _parts(words: tuple[_Word, ...]) -> _Parts | NotABlock | Refused:
-    """The time and the length off the end: `(at) 2pm for 2h`, or `for 2h (at) 2pm`."""
-    said = [word.text.lower() for word in words]
-    if said[-2:-1] == ["for"] and _like_length(said[-1]):
-        if len(words) < 3:
-            return Refused(WHEN)
-        at = 1 if said[-4:-3] == ["at"] else 0
-        return _Parts(words[: -3 - at], words[-3], (words[-2], words[-1]), words[-3 - at : -3])
-    at = 1 if said[-2:-1] == ["at"] else 0
-    if said[-3 - at : -2 - at] == ["for"] and _like_length(said[-2 - at]):
-        return _time_last(words, at)
-    return NotABlock()
-
-
-def _time_last(words: tuple[_Word, ...], at: int) -> _Parts | NotABlock | Refused:
-    """`for 2h 2pm`. A unit last (`for 2 hours`) is a length written as two words. After a bare
-    number, a last word that isn't a time is the end of a task's title (`dinner for 4 tonight`);
-    after anything more like a length (`for 1h noon`), it's a time glance can't read."""
-    last = words[-1].text.lower()
-    length = (words[-3 - at], words[-2 - at])
-    if last in UNITS:
-        return Refused(ONE_WORD)
-    if not last[:1].isdigit():
-        return NotABlock() if length[1].text.isdigit() else Refused(WHEN)
-    return _Parts(words[: -3 - at], words[-1], length, words[-2 : -2 + at])
-
-
-def _found(parts: _Parts, bang: tuple[_Word, ...], now: time) -> Found | Refused:
-    """A `!` at the end of the name means it must happen too, so `run ! 6pm for 1h` is the same
-    as `run 6pm for 1h !`: a name never ends in `!` on its own, as tasks.md couldn't read it."""
-    named_bang = tuple(word for word in parts.name[-1:] if not word.text.strip(MUST))
-    name = " ".join(word.text for word in parts.name[: len(parts.name) - len(named_bang)])
-    picked = (*parts.at, parts.clock, *parts.length, *named_bang, *bang)
-    match _from(parts, name, now, bool(bang or named_bang)):
-        case Block() as block:
-            return Found(block, tuple(sorted((word.start, word.end) for word in picked)))
-        case Refused() as refused:
-            return refused
-
-
-def _from(parts: _Parts, name: str, now: time, must: bool) -> Block | Refused:
-    """The time first: in `lunch for 1h`, it's the time that's missing, not the name."""
-    clock = parts.clock.text.lower()
-    if _is_length(clock):
-        return Refused(ONE_WORD)
-    match _clock(clock, now):
-        case Refused() as refused:
-            return refused
-        case start:
-            return _named(name, start, parts.length[1].text.lower(), must)
-
-
-def _named(name: str, start: time, length: str, must: bool) -> Block | Refused:
+    """`deep work 2pm for 2h` or `deep work for 2h 2pm`, then `!` if it must happen. A `!` at the
+    end of the name means the same (`run ! 6pm for 1h`), so a name never ends in one: tasks.md
+    would read it as the marker. `!!` counts as `!`."""
+    words = tuple(WORD.finditer(text))
+    end = tuple(word for word in words[-1:] if _is_bang(word))
+    body = words[: len(words) - len(end)]
+    tail = body[-3:]
+    kinds = tuple(_kind(word[0].lower(), now) for word in tail)
+    if kinds not in SHAPES:
+        return NotABlock()
+    named = body[:-3]
+    named_bang = tuple(word for word in named[-1:] if _is_bang(word))
+    name = " ".join(word[0] for word in named[: len(named) - len(named_bang)])
+    bangs = (*named_bang, *end)
     if not name:
         return Refused("what's the block for? its name goes first")
-    minutes = _minutes(length)
-    if not minutes:
-        return Refused("how long? like for 1h or 90m")
-    match _after(start, minutes):
+    said = {kind: word[0].lower() for kind, word in zip(kinds, tail, strict=True)}
+    (start,) = _times(said["time"], now)
+    match _after(start, _minutes(said["length"])):
         case Refused() as refused:
             return refused
-        case end:
-            return Block(start, end, name, must)
+        case finish:
+            marks = tuple(sorted(word.span() for word in (*tail, *bangs)))
+            return Found(Block(start, finish, name, bool(bangs)), marks)
 
 
-def _clock(said: str, now: time) -> time | Refused:
-    """`2pm` and `14:00` are exact. `9` or `9:30`, with no am or pm, is the next one after now,
-    or the evening one once both have gone. `12` is noon, and `09:00` nine in the morning."""
+def _kind(said: str, now: time) -> Kind:
+    if said == "for":
+        return "for"
+    if _minutes(said):
+        return "length"
+    return "time" if _times(said, now) else "other"
+
+
+def _is_bang(word: re.Match[str]) -> bool:
+    return not word[0].strip(MUST)
+
+
+def _times(said: str, now: time) -> tuple[time, ...]:
+    """The time a word names, if it names one. `2pm` and `14:00` are exact, and `noon` and
+    `evening` are looked up. `9` or `9:30`, with no am or pm, is the next one after now, or the
+    evening one once both have gone. `12` is noon, and `09:00` nine in the morning."""
     found = SAID.fullmatch(said)
     if not found:
-        return Refused(WHEN)
+        return tuple(at for word, at in NAMED_TIMES.items() if word == said)
     digits, minute, half = found[1], int(found[2] or 0), found[3]
     hour = int(digits)
     if half:
-        if not 1 <= hour <= 12:
-            return Refused(WHEN)
-        return time(hour % 12 + (12 if half == "pm" else 0), minute)
+        return (time(hour % 12 + (12 if half == "pm" else 0), minute),) if 1 <= hour <= 12 else ()
     if hour > 23:
-        return Refused(WHEN)
+        return ()
     morning = time(hour, minute)
     if digits.startswith("0") or not 1 <= hour <= 11:
-        return morning
-    return morning if morning >= now.replace(second=0, microsecond=0) else time(hour + 12, minute)
-
-
-def _like_length(said: str) -> bool:
-    """A number, perhaps with a unit: `1h`, but also `90`, `1.5h`, `-1h` or `2hrs`, which are
-    refused with how to write it rather than becoming part of a task's title."""
-    return bool(LIKE_LENGTH.fullmatch(said))
-
-
-def _is_length(said: str) -> bool:
-    return bool(said) and bool(LENGTH.fullmatch(said))
+        return (morning,)
+    gone = morning < now.replace(second=0, microsecond=0)
+    return (time(hour + 12, minute) if gone else morning,)
 
 
 def _minutes(length: str) -> int:
@@ -210,7 +131,7 @@ def _after(start: time, minutes: int) -> time | Refused:
     """The start is in the refusal, as it may not be the time typed: at 10:00, `9` is 21:00."""
     end = start.hour * 60 + start.minute + minutes
     if end >= 24 * 60:
-        return Refused(f"from {start:%H:%M}, that runs past 23:59")
+        return Refused(f"from {start:%H:%M}, that runs past midnight")
     return time(end // 60, end % 60)
 
 

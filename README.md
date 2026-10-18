@@ -23,7 +23,7 @@ Glance has two parts:
 | Command | Does |
 |---|---|
 | `<title>` (or `new <title>`, `+`) | Start a task. Anything active is parked. Use `new` for a title that starts with a command word (`new wait for Sam`) |
-| `<what> 2pm for 1h` | Plan a block of time today: `deep work 9 for 2h` (the next 9 o'clock), `call for 30m 14:30`. Lengths: `30m`, `90m`, `1h30m`. `!` at the end: it must happen. A block cuts back any it lands on, whatever their names. A task whose title ends in `for` and a number needs `new` first (`new tickets for 2`) |
+| `<what> 2pm for 1h` | Plan a block of time today: `deep work 9 for 2h` (the next 9 o'clock), `call for 30m 14:30`. Times: `2pm`, `14:30`, `noon`, `evening`. Lengths: `30m`, `90m`, `1h30m`. `!` at the end: it must happen. A block cuts back any it lands on, whatever their names. A line that doesn't end exactly like this is a task |
 | `park <note>` (or `pause`, `shelve`, `defer`) | Park the active task, with an optional "left off" note |
 | `wait <what>` | Park the active task as waiting on something |
 | `switch <title or number>` (or `s`) | Make a parked task active, or a Quick item (`s q2`) |
@@ -37,7 +37,7 @@ Glance has two parts:
 | `unblock <name or number>` | Take a block off today's plan |
 
 As you type, the words glance picked up turn blue (a block's time and length, or a command word),
-and a note on the right says which blocks a new one cuts back. A line starting with a space is
+and a note on the right says which blocks a new one cuts back. No blue means it'll be a task. A line starting with a space is
 for the assistant, which isn't built yet: the `›` turns yellow, and Enter just clears it.
 
 Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and

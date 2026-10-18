@@ -36,16 +36,14 @@ def applied(lists: Lists, text: str) -> Applied:
     [
         ("deep work 2pm for 1h30m", DEEP),
         ("deep work for 90m 2pm", DEEP),  # either order
-        ("deep work at 2pm for 90m", DEEP),
-        ("deep work for 90m at 2pm", DEEP),
         ("standup 10 for 15m", Block(time(10), time(10, 15), "standup")),  # the next 10
         ("standup 9 for 15m", Block(time(21), time(21, 15), "standup")),  # 9:00 has gone
         ("review 9am for 30m", Block(time(9), time(9, 30), "review")),  # gone, but it said am
         ("lunch 12 for 1h", Block(time(12), time(13), "lunch")),
         ("early 09:00 for 30m", Block(time(9), time(9, 30), "early")),
         ("gym 18:30 for 1h", Block(time(18, 30), time(19, 30), "gym")),
+        ("lunch noon for 1h", Block(time(12), time(13), "lunch")),  # a time looked up by name
         ("run 5:30PM for 1h !", RUN),
-        ("run 5:30pm for 1h!!", RUN),
         # a name can't end in a lone !: tasks.md would read it as must
         ("run !! 5:30pm for 1h", RUN),
         ("ship it! 4pm for 1h", Block(time(16), time(17), "ship it!")),
@@ -69,15 +67,12 @@ def test_a_block_is_planned_not_started() -> None:
     )
 
 
-@pytest.mark.parametrize("text", ["call dentist 3pm", "dinner for 4 tonight"])
+# Anything that doesn't end exactly like a block is a task: nothing turns blue, which says so
+@pytest.mark.parametrize(
+    "text", ["call dentist 3pm", "lunch for 1h", "deep work 2pm for 1.5h", "x 25pm for 1h"]
+)
 def test_without_a_time_and_a_length_its_a_task(text: str) -> None:
     assert applied(Lists(), text).lists == Lists(Task(text))
-
-
-def test_a_long_run_of_digits_is_read_quickly() -> None:
-    """It's read on each key press, and a pattern can take seconds on one."""
-    text = f"x 2pm for {'1' * 20000}x"
-    assert preview(text, CommandWords(), Lists(), NOW) == Preview()
 
 
 def deep(start: time, end: time) -> Block:
@@ -127,24 +122,12 @@ def test_a_block_on_a_stale_plan_starts_todays() -> None:
 @pytest.mark.parametrize(
     ("text", "reason"),
     [
-        ("lunch for 1h", "what time? like 2pm or 14:30"),
-        ("for 1h", "what time?"),
-        ("deep work 13pm for 1h", "what time?"),
-        ("deep work 2pm for 0m", "how long? like for 1h or 90m"),
-        # anything like a length is a block that's refused, not a task that parks Active
-        ("deep work 2pm for 90", "how long?"),
-        ("deep work 2pm for 100h", "how long?"),
-        ("deep work 2pm for -1.2345678901h", "how long?"),
-        ("lunch for 2hours noon", "what time?"),
-        ("deep work 2pm for 30minutes", "how long?"),
-        ("deep work 2pm for 1h 30m", "write the length as one word, like 1h30m"),
-        ("deep work 2pm for 2 hours", "write the length as one word"),
         ("! 2pm for 1h", "what's the block for?"),
-        ("x 9 for 3h", "from 21:00, that runs past 23:59"),
+        ("x 9 for 3h", "from 21:00, that runs past midnight"),
         ("call 6pm for 1h", "run must happen: unblock it first"),
     ],
 )
-def test_a_block_glance_cant_plan_is_refused_not_made_a_task(text: str, reason: str) -> None:
+def test_a_block_glance_cant_plan_is_refused(text: str, reason: str) -> None:
     match run(PLANNED, text):
         case Rejected(reason=said):
             assert said.startswith(reason)
@@ -157,15 +140,11 @@ def test_a_block_glance_cant_plan_is_refused_not_made_a_task(text: str, reason: 
     [
         ("deep work 8am for 1h !", Preview(((10, 13), (14, 17), (18, 20), (21, 22)))),
         ("call for 30m 2:30pm", Preview(((5, 8), (9, 12), (13, 19)), "trims deep work")),
-        (
-            "plan at 1pm for 3h!",
-            Preview(((5, 7), (8, 11), (12, 15), (16, 18), (18, 19)), "replaces deep work"),
-        ),
+        ("plan 1pm for 3h", Preview(((5, 8), (9, 12), (13, 15)), "replaces deep work")),
         (
             "call 6pm for 1h",
             Preview(((5, 8), (9, 12), (13, 15)), "run must happen: unblock it first"),
         ),
-        ("lunch for 1h", Preview(note="what time? like 2pm or 14:30")),
         ("call dentist 3pm", Preview()),
         ("wait for Sam 3pm for 1h", Preview(((0, 4),))),  # the command word wins
         (" what's next?", Preview(assistant=True)),
