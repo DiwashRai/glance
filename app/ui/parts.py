@@ -333,7 +333,7 @@ def message_line() -> QLabel:
     """Plain text, wrapped, in room for two lines, so a long message doesn't move anything."""
     widget = label("", "dim", 13)
     widget.setWordWrap(True)
-    widget.setContentsMargins(22, 0, 22, 0)
+    widget.setContentsMargins(4, 0, 4, 0)
     widget.setFixedHeight(widget.fontMetrics().lineSpacing() * 2 + 4)
     widget.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
     return widget
@@ -343,7 +343,7 @@ def hints(words: CommandWords) -> QWidget:
     """`esc` close · `↵` run · the first word of each command."""
     row = QWidget()
     layout = QHBoxLayout(row)
-    layout.setContentsMargins(22, 0, 22, 0)
+    layout.setContentsMargins(4, 0, 4, 0)
     layout.setSpacing(6)
     for key, does in (("esc", "close"), ("↵", "run")):
         layout.addWidget(label(key, "kbd", 11))
