@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, time
 
-from app.core import today
+from app.core import blocks, today
 from app.core.commands import Applied, Rejected, apply, parse_command
 from app.core.model import CommandWords, Event, Lists
 from app.store import NO_FILE, Snapshot, Store, Unreadable
@@ -73,7 +73,13 @@ class Controller:
         """What I've been on today, up to now. If writing the history fails, this shows the
         last change until the next open re-reads events.log."""
         now = self.now()
-        return today.day(self.log, now, _midnight(now), self.lists.active)
+        planned = enumerate(blocks.planned(self.lists.plan, now.date()), start=1)
+        slots = tuple(
+            today.Slot(number, block, _at(now, block.start), _at(now, block.end))
+            for number, block in planned
+            if _exists(now, block.start) and _exists(now, block.end)
+        )
+        return today.day(self.log, now, _at(now, time()), self.lists.active, slots)
 
     def write_history(self) -> None:
         """Append the last change's events to events.log."""
@@ -81,7 +87,14 @@ class Controller:
         self.store.append(events)
 
 
-def _midnight(now: datetime) -> datetime:
-    """The start of now's day, with the UTC offset it had then, which isn't now's on the day
-    the clocks change. That takes the zone's rules, so it's worked out here, not in core."""
-    return datetime.combine(now.date(), time()).astimezone()
+def _exists(now: datetime, clock: time) -> bool:
+    """False for a time in the hour the clocks skip, the night they go forward. A block that
+    starts or ends then is left off the card that night; it keeps its number for unblock."""
+    wall = datetime.combine(now.date(), clock)
+    return _at(now, clock).replace(tzinfo=None) == wall
+
+
+def _at(now: datetime, clock: time) -> datetime:
+    """That time on now's day, with the UTC offset it has then, which isn't now's on the day the
+    clocks change. That takes the zone's rules, so it's worked out here, not in core."""
+    return datetime.combine(now.date(), clock).astimezone()

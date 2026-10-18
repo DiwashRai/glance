@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from itertools import pairwise
 
 from app.core.events_log import History, as_written
-from app.core.model import Event, EventKind, FromQuick, Idle, Task, working
+from app.core.model import Block, Event, EventKind, FromQuick, Idle, Task, working
 from app.core.tasks_md import Problem
 
 STARTS: tuple[EventKind, ...] = ("started", "resumed")
@@ -32,19 +32,37 @@ class Span:
 
 
 @dataclass(frozen=True)
+class Slot:
+    """A block from today's plan, on the clock."""
+
+    number: int  # as unblock counts it
+    block: Block
+    start: datetime
+    end: datetime
+
+
+@dataclass(frozen=True)
 class Day:
     now: datetime
     since: datetime  # the start of today, where the time on tasks is counted from
     spans: tuple[Span, ...] = ()  # oldest first
+    slots: tuple[Slot, ...] = ()  # by start time
     problem: str = ""  # why events.log can't be read
 
 
-def day(history: Log, now: datetime, since: datetime, active: Task | FromQuick | Idle) -> Day:
+def day(
+    history: Log,
+    now: datetime,
+    since: datetime,
+    active: Task | FromQuick | Idle,
+    slots: tuple[Slot, ...],
+) -> Day:
+    """The plan shows even when events.log can't be read."""
     match history:
         case History(events=events):
-            return Day(now, since, worked(events, now, _title(active)))
+            return Day(now, since, worked(events, now, _title(active)), slots)
         case Problem(line=line, message=message):
-            return Day(now, since, problem=f"events.log line {line}: {message}")
+            return Day(now, since, slots=slots, problem=f"events.log line {line}: {message}")
 
 
 def logged(history: Log, events: Sequence[Event]) -> Log:

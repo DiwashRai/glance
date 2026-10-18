@@ -113,6 +113,8 @@ Typed into the overlay's text box. The first word decides; anything else goes to
 | `quick <text>` (or `q`) | Add a Quick item, with an optional size at the end (`~3m`, `~1h`). Switching to one (`s q2`) and parking it puts it back in Quick; parking it with a note or as waiting makes it a parked task |
 | `focus <text>` | Add to Focus, if a slot is free |
 | `unfocus <name or number>` | Take something out of Focus |
+| `block <time> <length> <what>` | Plan a block today: `block 14:00 1h deep work`, or with an end, `block 14:00-15:30 PR reviews`. `!` at the end marks it must-happen |
+| `unblock <name or number>` | Take a block off today's plan |
 
 Keys in the overlay and on drop cards:
 
@@ -282,8 +284,9 @@ PC. The agent's notes about how I work are kept separately in each environment.
 
 Plain files on each machine, kept out of OneDrive-synced folders:
 
-- `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps and Quick
-  items, as plain Markdown that I or an agent can read and edit. Glance rewrites it in a fixed
+- `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps, Quick
+  items and today's planned blocks (under `# Today 2026-10-18`; another day's are ignored), as
+  plain Markdown that I or an agent can read and edit. Glance rewrites it in a fixed
   form after every command, saves it safely (write a temp file, then swap it in), refuses a file
   it can't read rather than guessing, and notices when it was edited outside glance.
 - `events.log`: a running log of what happened (started, parked, finished, check-in answered,

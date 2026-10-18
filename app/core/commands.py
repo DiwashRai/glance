@@ -12,21 +12,24 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TypeVar
 
-from app.core import steps
+from app.core import blocks, steps
 from app.core.model import (
     FOCUS_SLOTS,
     AllDone,
     BackTo,
+    Block,
     CommandWords,
     Event,
     FromQuick,
     Idle,
     LeftOff,
     Lists,
+    NoPlan,
     NoSteps,
     OnlyLeft,
     OnStep,
     ParkedTask,
+    Plan,
     Task,
     Waiting,
     shown,
@@ -95,12 +98,35 @@ class Finish:
 
 
 @dataclass(frozen=True)
+class AddBlock:
+    text: str
+
+
+@dataclass(frozen=True)
+class Unblock:
+    query: str
+
+
+@dataclass(frozen=True)
 class Unknown:
     word: str
 
 
 Command = (
-    New | Park | Wait | Switch | Done | Focus | Unfocus | Quick | AddStep | Skip | Finish | Unknown
+    New
+    | Park
+    | Wait
+    | Switch
+    | Done
+    | Focus
+    | Unfocus
+    | Quick
+    | AddStep
+    | Skip
+    | Finish
+    | AddBlock
+    | Unblock
+    | Unknown
 )
 
 
@@ -137,6 +163,8 @@ def parse_command(text: str, words: CommandWords) -> Command:
         (words.step, AddStep),
         (words.skip, Skip),
         (words.finish, Finish),
+        (words.block, AddBlock),
+        (words.unblock, Unblock),
     )
     for command_words, command in commands:
         if word in command_words:
@@ -148,10 +176,8 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
     match command:
         case New(title=title):
             return _new(lists, title, now)
-        case Park(note=note):
-            return _park(lists, LeftOff(note), now)
-        case Wait(on=on):
-            return _park(lists, Waiting(on), now) if on else Rejected("wait on what?")
+        case Park() | Wait():
+            return _away(lists, command, now)
         case Switch(query=query):
             return _switch(lists, query, now)
         case Done(query=query):
@@ -162,6 +188,8 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _step_command(lists, command, now)
         case Quick(text=text):
             return _quick(lists, text, now)
+        case AddBlock() | Unblock():
+            return _plan_command(lists, command, now)
         case Unknown(word=word):
             return Rejected(f"not a command: {word}" if word else "type a command")
 
@@ -213,6 +241,16 @@ def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
     aside, events, said = _set_aside(lists, LeftOff(), now)
     events = (*events, Event(now, "started", task.title))
     return Applied(replace(aside, active=task), events, f"started {shown(task)}{_and(said)}")
+
+
+def _away(lists: Lists, command: Park | Wait, now: datetime) -> Applied | Rejected:
+    match command:
+        case Park(note=note):
+            return _park(lists, LeftOff(note), now)
+        case Wait(on=""):
+            return Rejected("wait on what?")
+        case Wait(on=on):
+            return _park(lists, Waiting(on), now)
 
 
 def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | Rejected:
@@ -470,3 +508,63 @@ def _unfocus(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
                 (Event(now, "unfocused", text),),
                 f"unfocused {text}",
             )
+
+
+def _plan_command(lists: Lists, command: AddBlock | Unblock, now: datetime) -> Applied | Rejected:
+    match command:
+        case AddBlock(text=""):
+            return Rejected(f"block when? {blocks.EXAMPLE}")
+        case AddBlock(text=text):
+            return _block(lists, text, now)
+        case Unblock(query=query):
+            return _unblock(lists, query, now)
+
+
+def _block(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
+    match blocks.read(text):
+        case blocks.Refused(why=why):
+            return Rejected(why)
+        case block:
+            planned = blocks.add(lists.plan, block, now.date())
+    match planned:
+        case blocks.Refused(why=why):
+            return Rejected(why)
+        case plan:
+            event = Event(now, "planned", block.what, blocks.times(block))
+            said = f"planned {_said(block)}{_replaced(lists.plan, now)}"
+            return Applied(replace(lists, plan=plan), (event,), said)
+
+
+def _replaced(plan: Plan | NoPlan, now: datetime) -> str:
+    """A stale plan with blocks in it goes when today's starts, so say so."""
+    match plan:
+        case Plan(day=day, blocks=old) if old and day != now.date():
+            return f" · replaces the plan for {day.isoformat()}"
+        case Plan() | NoPlan():
+            return ""
+
+
+def _said(block: Block) -> str:
+    """`deep work 14:00-15:30`, and whether it must happen."""
+    must = " · must happen today" if block.must else ""
+    return f"{block.what} {blocks.times(block)}{must}"
+
+
+def _unblock(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
+    """By its number in time order, or its name, like unfocus."""
+    planned = blocks.planned(lists.plan, now.date())
+    if not query:
+        return Rejected("unblock which? its number or name")
+    if not planned:
+        return Rejected("nothing is planned today")
+    refusal = f"no block today matches '{query}'"
+    names = _numbered(block.what for block in planned)
+    picked = _row(query, len(names), refusal) if _is_number(query) else _pick(names, query, refusal)
+    match picked:
+        case Rejected() as rejected:
+            return rejected
+        case _Picked(index=index):
+            block = planned[index]
+            plan = Plan(now.date(), _without(planned, index))
+            event = Event(now, "unplanned", block.what, blocks.times(block))
+            return Applied(replace(lists, plan=plan), (event,), f"unblocked {_said(block)}")

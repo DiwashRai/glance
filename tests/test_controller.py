@@ -75,3 +75,12 @@ def test_an_unreadable_file_refuses_commands_until_fixed(
     (tmp_path / "tasks.md").write_text("# Active\n- fixed\n", encoding="utf-8")
     assert glance.run("done") == View(Lists(Task("fixed"), ()), "tasks.md changed, run it again")
     assert glance.run("done").lists == Lists(Idle(), ())
+
+
+def test_todays_blocks_are_put_on_the_clock(tmp_path: Path) -> None:
+    glance = controller(tmp_path)
+    glance.open()
+    glance.run("block 14:00 1h deep work")
+    (slot,) = glance.day().slots
+    assert (slot.number, slot.block.what, slot.start.hour) == (1, "deep work", 14)
+    assert slot.end - slot.start == timedelta(hours=1)

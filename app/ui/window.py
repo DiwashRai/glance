@@ -43,7 +43,7 @@ class Window(QWidget):
         self.focus = parts.FocusCard()
         self.parked = parts.parked_card()
         self.quick = parts.quick_card()
-        self.today = TodayCard(controller.day())
+        self.today = TodayCard(controller.day(), controller.words.block[0])
         self.active = parts.ActiveCard()
         self.prompt = parts.Prompt()
         self.message = parts.message_line()

@@ -33,6 +33,8 @@ Glance has two parts:
 | `focus <text>` | Keep one of at most two goals in view, above Parked |
 | `unfocus <name or number>` | Take a goal out of Focus |
 | `quick <text> ~5m` (or `q`) | Add something small to do while you wait; the size is optional |
+| `block 14:00 1h deep work` | Plan a block of time today, by length or end (`14:00-15:30`); `!` at the end: it must happen |
+| `unblock <name or number>` | Take a block off today's plan |
 
 Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
 what happened is logged to `events.log` next to it.

@@ -3,14 +3,14 @@
 Bad states can't be written down: Active is a task or idle, and a parked task is either left off
 (with an optional "where I left off" note) or waiting on something. Focus is one or two things
 the work is for, kept in view as a reminder: never made active, only added and removed. Quick
-holds small next actions, smallest first.
+holds small next actions, smallest first. The plan is today's blocks of set-aside time.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Literal
 
 FOCUS_SLOTS = 2
@@ -162,11 +162,33 @@ class ParkedTask:
 
 
 @dataclass(frozen=True)
+class Block:
+    """Time set aside on the plan's day: `14:00-15:30 deep work`. It ends by midnight."""
+
+    start: time
+    end: time
+    what: str
+    must: bool = False  # it must happen today: moved, never dropped
+
+
+@dataclass(frozen=True)
+class Plan:
+    day: date  # a plan for another day is stale: it's kept, but not shown or added to
+    blocks: tuple[Block, ...] = ()  # by start time, never overlapping
+
+
+@dataclass(frozen=True)
+class NoPlan:
+    """No blocks have been planned yet."""
+
+
+@dataclass(frozen=True)
 class Lists:
     active: Task | FromQuick | Idle = Idle()
     parked: tuple[ParkedTask, ...] = ()  # most recently touched first
     focus: tuple[str, ...] = ()  # at most FOCUS_SLOTS, oldest first
     quick: tuple[Task, ...] = ()  # smallest first
+    plan: Plan | NoPlan = NoPlan()
 
 
 EventKind = Literal[
@@ -181,6 +203,8 @@ EventKind = Literal[
     "added",
     "ticked",
     "skipped",
+    "planned",  # a block added to today's plan
+    "unplanned",
 ]
 
 
@@ -216,3 +240,5 @@ class CommandWords:
     step: tuple[str, ...] = ("step",)
     skip: tuple[str, ...] = ("skip", ">")
     finish: tuple[str, ...] = ("finish",)
+    block: tuple[str, ...] = ("block",)
+    unblock: tuple[str, ...] = ("unblock",)
