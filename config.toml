@@ -2,6 +2,7 @@
 # glance v2. Every key has a default, so this table can stay empty.
 [glance]
 # data_folder = ""          # empty: %LOCALAPPDATA%\glance (tasks.md, events.log, glance.log)
+# agents = ["assistant", "chief"]  # herdr agents: one space first sends to the first, two to the second
 
 # [glance.commands]         # the words that start each command
 # new = ["new", "+"]

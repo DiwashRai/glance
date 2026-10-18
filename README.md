@@ -37,8 +37,12 @@ Glance has two parts:
 | `unblock <name or number>` | Take a block off today's plan |
 
 As you type, the words glance picked up turn blue (a block's time and length, or a command word),
-and a note on the right says which blocks a new one cuts back. No blue means it'll be a task. A line starting with a space is
-for the assistant, which isn't built yet: the `›` turns yellow, and Enter just clears it.
+and a note on the right says which blocks a new one cuts back. No blue means it'll be a task.
+
+**Talking to your agents.** A line starting with one space is typed into your `assistant` agent's
+herdr pane, as if you'd typed it there; two or more spaces send it to `chief`. The `›` and the
+agent's name turn yellow, or the note says in red that it isn't running (your text stays to send
+again). Replies are in the agent's pane. The names are `agents` in `[glance]`.
 
 Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
 what happened is logged to `events.log` next to it.

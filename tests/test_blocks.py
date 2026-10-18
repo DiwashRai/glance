@@ -147,7 +147,7 @@ def test_a_block_glance_cant_plan_is_refused(text: str, reason: str) -> None:
         ),
         ("call dentist 3pm", Preview()),
         ("wait for Sam 3pm for 1h", Preview(((0, 4),))),  # the command word wins
-        (" what's next?", Preview(assistant=True)),
+        (" what's next?", Preview(agent="assistant", note="assistant")),
     ],
 )
 def test_preview_marks_what_glance_picked_up(text: str, shown: Preview) -> None:

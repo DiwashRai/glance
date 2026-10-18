@@ -13,7 +13,7 @@ from PySide6.QtCore import QLockFile, QTimer
 from PySide6.QtWidgets import QApplication
 
 from app.config import default_config, load_settings
-from app.controller import Controller
+from app.controller import Agents, Controller
 from app.store import Store
 from app.ui.errors import ErrorHook
 from app.ui.shell import Shell
@@ -23,8 +23,9 @@ class AlreadyRunning(RuntimeError):
     pass
 
 
-def run(app: QApplication, home: Path, argv: list[str]) -> int:
-    """`home` is where glance lives: the folder with config.toml.
+def run(app: QApplication, home: Path, argv: list[str], agents: Agents) -> int:
+    """`home` is where glance lives: the folder with config.toml. `agents` are the ones a line
+    starting with spaces is sent to (herdr's).
 
     The entry point owns `app`, so it outlives this function: a start-up error unwinds `run`,
     and the error hook still needs a live QApplication to show its message box.
@@ -39,7 +40,7 @@ def run(app: QApplication, home: Path, argv: list[str]) -> int:
         raise AlreadyRunning("glance is already running")
     hook.log_to(settings.data_folder / "glance.log")
 
-    controller = Controller(Store(settings.data_folder), settings.words, _now)
+    controller = Controller(Store(settings.data_folder), settings.words, _now, agents)
     controller.open()  # so the HUD shows the active task before the overlay is first opened
     shell = Shell(app, controller, settings.hud, settings.counts_file)
     shell.start()

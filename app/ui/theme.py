@@ -106,7 +106,7 @@ QLabel[role="kbd"] {{
     padding: 0px 6px;
 }}
 QLabel[role="prompt-mark"] {{ color: {BLUE}; }}
-QLabel[role="prompt-mark"][tone="assistant"] {{ color: {YELLOW}; }}
+QLabel[tone="agent"] {{ color: {YELLOW}; }}
 QLineEdit {{
     background: transparent; border: none; color: {BRIGHT}; selection-background-color: {SELECTION};
 }}

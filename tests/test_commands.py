@@ -82,6 +82,9 @@ def applied(lists: Lists, text: str) -> Applied:
         (">", Skip()),
         ("finish", Finish()),
         ("hello there", Typed("hello there")),
+        (" what's next?", Ask("assistant", "what's next?")),
+        ("  ask backend", Ask("chief", "ask backend")),
+        ("     ask backend", Ask("chief", "ask backend")),
     ],
 )
 def test_parses_the_first_word(text: str, command: Command | Ask) -> None:
@@ -99,6 +102,8 @@ def test_words_come_from_settings() -> None:
     words = CommandWords(park=("later",))
     assert parse_command("later notes", words) == Park("notes")
     assert parse_command("park notes", words) == Typed("park notes")
+    # with one agent, any number of spaces is for it
+    assert parse_command("  x", CommandWords(agents=("me",))) == Ask("me", "x")
 
 
 @pytest.mark.parametrize(

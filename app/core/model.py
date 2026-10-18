@@ -241,3 +241,5 @@ class CommandWords:
     skip: tuple[str, ...] = ("skip", ">")
     finish: tuple[str, ...] = ("finish",)
     unblock: tuple[str, ...] = ("unblock",)
+    # Not command words: the agents a line starting with one space goes to, then two or more
+    agents: tuple[str, ...] = ("assistant", "chief")

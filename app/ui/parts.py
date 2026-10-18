@@ -328,7 +328,8 @@ NOTE_WIDTH = 260
 
 class Prompt(QFrame):
     """The text box, with board F's blue `›`. As I type, the words glance picked up are blue, and
-    a note on the right says what else will happen. Its `›` turns yellow for the assistant."""
+    a note on the right says what else will happen. For an agent, the `›` and the note (its name)
+    turn yellow, or the note is red if it can't be sent to."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -347,10 +348,12 @@ class Prompt(QFrame):
 
     def show_preview(self, preview: Preview) -> None:
         """The note never takes more than NOTE_WIDTH, so what's typed keeps its room."""
-        note = "assistant" if preview.assistant else preview.note
+        note = preview.note
         fitted = self.note.fontMetrics().elidedText(note, Qt.TextElideMode.ElideRight, NOTE_WIDTH)
         self.note.setText(fitted)
-        restyle(self.mark, "tone", "assistant" if preview.assistant else "")
+        agent = "agent" if preview.agent else ""
+        restyle(self.mark, "tone", agent)
+        restyle(self.note, "tone", "error" if preview.trouble else agent)
         _colour(self.input, preview.marks)
 
 

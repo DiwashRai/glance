@@ -112,8 +112,10 @@ class Typed:
 
 @dataclass(frozen=True)
 class Ask:
-    """A line starting with a space is for the assistant, which isn't built yet."""
+    """A line for an agent: one space first is for the first of `CommandWords.agents`
+    (assistant), two or more for the second (chief)."""
 
+    agent: str
     text: str
 
 
@@ -153,19 +155,22 @@ class Preview:
 
     marks: tuple[tuple[int, int], ...] = ()
     note: str = ""
-    assistant: bool = False  # it's for the assistant
+    agent: str = ""  # who a line for an agent goes to
+    trouble: bool = False  # the note says something's wrong outside glance: shown in red
     plan: Plan | NoPlan = NoPlan()  # as it would be: not shown, but Enter checks it's the same
 
 
 def parse_command(text: str, words: CommandWords) -> Command | Ask:
     """A command word first decides, case-insensitively, and the rest is the argument. With no
-    command word, it's `Typed`; with a space first, it's for the assistant.
+    command word, it's `Typed`; with spaces first, it's for an agent (`Ask`).
 
     Any run of whitespace in the argument, line breaks included, becomes one space, so a title or
     note is always a single line and `tasks.md` can always be read back.
     """
-    if text.startswith(" "):
-        return Ask(text[1:])
+    spaces = len(text) - len(text.lstrip(" "))
+    if spaces:
+        agents = words.agents
+        return Ask(agents[min(spaces, len(agents)) - 1], text.strip())
     first, *rest = text.split(maxsplit=1) or [""]
     word = first.lower()
     argument = " ".join(rest[0].split()) if rest else ""
@@ -193,8 +198,8 @@ def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Prev
     """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
     the command before it runs. A block's time, length and `!` are marked, with what it cuts."""
     match parse_command(text, words):
-        case Ask():
-            return Preview(assistant=True)
+        case Ask(agent=agent):
+            return Preview(agent=agent, note=agent)
         case Typed():
             return _preview_block(lists, text, now)
         case _:

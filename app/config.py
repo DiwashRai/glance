@@ -28,6 +28,9 @@ else:
 DEFAULT_WORDS = CommandWords()
 Word = Annotated[str, msgspec.Meta(pattern=r"^\S+\Z")]
 Words = Annotated[tuple[Word, ...], msgspec.Meta(min_length=1)]
+# herdr's rule for an agent's name
+Agent = Annotated[str, msgspec.Meta(pattern=r"^[a-z][a-z0-9_-]{0,31}\Z")]
+Agents = Annotated[tuple[Agent, ...], msgspec.Meta(min_length=1, max_length=2)]  # one space, two
 
 
 class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
@@ -67,6 +70,7 @@ class _Hud(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
 
 class _Glance(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     data_folder: str = ""
+    agents: Agents = DEFAULT_WORDS.agents  # not command words: they're never mixed up
     commands: _Commands = msgspec.field(default_factory=_Commands)
     hud: _Hud = msgspec.field(default_factory=_Hud)
 
@@ -103,7 +107,7 @@ def load_settings(path: Path) -> Settings:
     glance = file.glance
     return Settings(
         data_folder=_data_folder(glance.data_folder, path.parent),
-        words=CommandWords(**glance.commands.groups()),
+        words=CommandWords(**glance.commands.groups(), agents=glance.agents),
         hud=HudSettings(**msgspec.structs.asdict(glance.hud)),
         counts_file=path.parent / file.updater.output_path,
     )
