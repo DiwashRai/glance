@@ -12,6 +12,7 @@ from app.types import NonEmpty, Table
 from app.utils import run_no_window
 
 _SCRIPT_PATH = Path(__file__).with_name("get_outlook_unread.ps1")
+Unread = Annotated[int, msgspec.Meta(ge=0)]
 
 
 class _Config(msgspec.Struct):
@@ -38,7 +39,7 @@ def count(provider: Table, requests: Sequence[Table]) -> int:
 
 
 @functools.cache
-def unread(store: str, numbered: tuple[str, ...]) -> dict[str, dict[str, int]]:
+def unread(store: str, numbered: tuple[str, ...]) -> dict[str, dict[str, Unread]]:
     """Unread counts by folder: the store's under its address, the numbered ones under "default".
     The script runs once a run for each store and set of numbers, however many entries ask."""
     command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"]
@@ -53,4 +54,5 @@ def unread(store: str, numbered: tuple[str, ...]) -> dict[str, dict[str, int]]:
     failed = msgspec.json.decode(completed.stdout, type=_Failed).error
     if failed:
         raise RuntimeError(failed)
-    return msgspec.json.decode(completed.stdout, type=dict[str, dict[str, int]])
+    # the script gives -1 for a folder it can't open: refused here, so only this entry fails
+    return msgspec.json.decode(completed.stdout, type=dict[str, dict[str, Unread]])

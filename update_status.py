@@ -11,7 +11,6 @@ import time
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Annotated
 
 import msgspec
 
@@ -40,8 +39,7 @@ class Entry(msgspec.Struct, frozen=True):
     label: NonEmpty
     icon: str
     thresholds: Thresholds
-    # what to ask the provider, each checked by it. None would be a count of 0, so it's refused
-    requests: Annotated[tuple[Table, ...], msgspec.Meta(min_length=1)]
+    requests: tuple[Table, ...] = ()  # what to ask the provider, each checked by it
 
 
 class Collector(msgspec.Struct, frozen=True):
@@ -116,6 +114,8 @@ def build_status_rows(config: Collector) -> list[CountsRow]:
         provider_start = time.perf_counter()
         logger.info("Starting provider '%s' for '%s'", entry.provider, entry.label)
         try:
+            if not entry.requests:  # it would count 0, and look like nothing to do
+                raise ValueError(f"'{entry.label}' asks its provider nothing: add requests")
             provider = config.providers[entry.provider]
             count = COUNTS[msgspec.convert(provider, _Kind).kind]
             total = count(provider, entry.requests)
@@ -160,8 +160,15 @@ def publish_status_output(content: str, output_path: Path):
     os.replace(temp, output_path)  # atomic, so the HUD never reads half a file
 
 
+def _log_crash(_kind: type[BaseException], error: BaseException, _trace: object) -> None:
+    """A run that stops (a bad config, say) is logged: the scheduled run has no console, and
+    the HUD keeps showing the last counts."""
+    logger.critical("update_status stopped", exc_info=error)
+
+
 def main():
     configure_logging()
+    sys.excepthook = _log_crash
     run_start = time.perf_counter()
     logger.info("Starting update_status run")
     args = parse_args()

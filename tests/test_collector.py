@@ -57,17 +57,14 @@ def test_an_entry_that_fails_is_minus_one_and_the_others_still_count() -> None:
     providers = '[providers.demo]\nkind = "dummy"\noutput_path = "nowhere.json"\n'
     providers += '[providers.odd]\nkind = "fax"\n'  # no such provider
     text = providers + entry("demo", "ok") + entry("missing", "a") + entry("odd", "b")
+    text += entry("demo", "c", requests="[]")  # would count 0, as if all done
     rows: list[CountsRow] = update_status.build_status_rows(collector(text))
-    assert rows == [("ok", "", 3, 3), ("a", "", -1, 3), ("b", "", -1, 3)]
+    assert rows == [("ok", "", 3, 3), ("a", "", -1, 3), ("b", "", -1, 3), ("c", "", -1, 3)]
 
 
-@pytest.mark.parametrize(
-    ("text", "key"),
-    [(entry("demo", ""), "label"), (entry("demo", "x", requests="[]"), "requests")],
-)
-def test_a_bad_config_is_refused_naming_the_key(text: str, key: str) -> None:
-    with pytest.raises(msgspec.ValidationError, match=rf"entries\[0\]\.{key}"):
-        collector(text)
+def test_a_bad_config_is_refused_naming_the_key() -> None:
+    with pytest.raises(msgspec.ValidationError, match=r"entries\[0\]\.label"):
+        collector(entry("demo", ""))
 
 
 def test_todoist_pages_and_counts_a_task_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -140,10 +137,17 @@ def test_outlook_adds_named_and_numbered_folders_running_the_script_once(
     assert outlook_emails.count(provider, [{"folders": ["inbox", "06"]}]) == 5
     assert len(calls) == 1 and calls[0][-2:] == ["-DefaultFolderIds", "6"]
 
-    def failing(command: list[str]) -> subprocess.CompletedProcess[str]:
-        return ran({"error": "no Outlook"})
 
-    outlook_emails.unread.cache_clear()
-    monkeypatch.setattr(outlook_emails, "run_no_window", failing)
-    with pytest.raises(RuntimeError, match="no Outlook"):
-        outlook_emails.count(provider, [{"folders": ["inbox"]}])
+@pytest.mark.parametrize(
+    ("answer", "refused"),
+    [({"error": "no Outlook"}, "no Outlook"), ({"default": {"6": -1}}, ">= 0")],  # -1: can't open
+)
+def test_outlook_fails_its_entry_when_the_script_fails_or_a_folder_cant_be_read(
+    monkeypatch: pytest.MonkeyPatch, answer: object, refused: str
+) -> None:
+    def script(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return ran(answer)
+
+    monkeypatch.setattr(outlook_emails, "run_no_window", script)
+    with pytest.raises((RuntimeError, msgspec.ValidationError), match=refused):
+        outlook_emails.count({"outlook_store": "me@x.com"}, [{"folders": ["6"]}])

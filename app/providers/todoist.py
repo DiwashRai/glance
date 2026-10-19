@@ -47,10 +47,10 @@ def count(provider: Table, requests: Sequence[Table]) -> int:
 
 
 def _task_ids(token: str, request: _Request) -> set[str]:
+    query = request.filter or request.query
     found: set[str] = set()
     cursor = ""
     for _ in range(MAX_PAGES):
-        query = request.filter or request.query
         answer = _load_page(_page_request(token, query, request.lang, cursor))
         page = msgspec.json.decode(answer, type=_Page)
         found.update(task.id for task in page.results)
