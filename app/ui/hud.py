@@ -214,7 +214,7 @@ def _symbol(count: Count, settings: HudSettings, colour: str) -> QLabel:
     if settings.labels == "text":
         return _text(count.label, colour, 13)
     if count.icon not in icons.HUD:
-        return _text(count.icon, colour, 15)
+        return _text(count.icon, colour, 13)  # the number's size, so every chip is as tall
     symbol = QLabel()
     symbol.setPixmap(icons.pixmap(icons.HUD[count.icon], colour, 16))
     return symbol
