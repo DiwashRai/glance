@@ -1,95 +1,59 @@
+"""Jira issues: each request is a list of JQL searches, and an issue found by more than one counts
+once."""
+
 import json
 import urllib.request
 from collections.abc import Sequence
-from typing import ClassVar
+from typing import Annotated
 
-from app.providers.registry import provider_registry
-from app.types import ProviderContext, TomlTable
+import msgspec
+
+from app.types import NonEmpty, Table
 
 
-def fetch_jira_query_issue_ids(base_url: str, api_version: int | str, token: str, jql: str):
-    issue_ids: set[str] = set()
-    start_at = 0
+class _Config(msgspec.Struct):
+    base_url: NonEmpty
+    api_version: int | str
+    api_token: NonEmpty
 
+
+class _Request(msgspec.Struct):
+    jql: Annotated[tuple[NonEmpty, ...], msgspec.Meta(min_length=1)]
+
+
+class _Issue(msgspec.Struct):
+    id: str | int
+
+
+class _Page(msgspec.Struct):
+    issues: tuple[_Issue, ...] = ()
+    total: int = 0
+
+
+def count(provider: Table, requests: Sequence[Table]) -> int:
+    config = msgspec.convert(provider, _Config)
+    searches = [jql for request in requests for jql in msgspec.convert(request, _Request).jql]
+    return len(set[str]().union(*(_issue_ids(config, jql) for jql in searches)))
+
+
+def _issue_ids(config: _Config, jql: str) -> set[str]:
+    """Page by page, until there are no more."""
+    found: set[str] = set()
+    start = 0
     while True:
-        payload = json.dumps(
-            {
-                "jql": jql,
-                "fields": ["id"],
-                "startAt": start_at,
-                "maxResults": 100,
-            }
-        ).encode("utf-8")
+        body = {"jql": jql, "fields": ["id"], "startAt": start, "maxResults": 100}
         request = urllib.request.Request(
-            f"{base_url.rstrip('/')}/rest/api/{api_version}/search",
-            data=payload,
+            f"{config.base_url.rstrip('/')}/rest/api/{config.api_version}/search",
+            data=json.dumps(body).encode("utf-8"),
             headers={
-                "Authorization": f"Bearer {token}",
+                "Authorization": f"Bearer {config.api_token}",
                 "Content-Type": "application/json",
             },
             method="POST",
         )
-
         with urllib.request.urlopen(request) as response:
-            result = json.load(response)
-
-        issues = result.get("issues", [])
-        for issue in issues:
-            issue_id = issue.get("id")
-            if issue_id is not None:
-                issue_ids.add(str(issue_id))
-
-        total = int(result.get("total", 0))
-        start_at += len(issues)
-        if start_at >= total or not issues:
-            return issue_ids
-
-
-def get_issue_count(base_url: str, api_version: int | str, token: str, jqls: Sequence[str]) -> int:
-    issue_ids: set[str] = set()
-    for jql in jqls:
-        issue_ids.update(fetch_jira_query_issue_ids(base_url, api_version, token, jql))
-    return len(issue_ids)
-
-
-def _required_str(ctx: ProviderContext, key: str) -> str:
-    value = ctx.provider_config.get(key)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"[providers.{ctx.provider_name}].{key} must be a non-empty string")
-    return value
-
-
-def _request_jqls(request: TomlTable) -> list[str]:
-    jql = request.get("jql")
-    if not isinstance(jql, list) or not jql:
-        raise ValueError("Jira requests require a non-empty 'jql' list")
-
-    jqls: list[str] = []
-    for item in jql:
-        if not isinstance(item, str) or not item:
-            raise ValueError("Jira jql items must be non-empty strings")
-        jqls.append(item)
-    return jqls
-
-
-def _parse_jira_input(ctx: ProviderContext) -> tuple[str, int | str, str, list[str]]:
-    base_url = _required_str(ctx, "base_url")
-
-    api_version = ctx.provider_config.get("api_version")
-    if not isinstance(api_version, (int, str)) or not str(api_version):
-        raise ValueError(f"[providers.{ctx.provider_name}].api_version must be set")
-
-    api_token = _required_str(ctx, "api_token")
-    jqls = [jql for request in ctx.requests for jql in _request_jqls(request)]
-    return base_url, api_version, api_token, jqls
-
-
-class JiraProvider:
-    kind: ClassVar[str] = "jira"
-
-    def count(self, ctx: ProviderContext) -> int:
-        base_url, api_version, api_token, jqls = _parse_jira_input(ctx)
-        return get_issue_count(base_url, api_version, api_token, jqls)
-
-
-provider_registry.register(JiraProvider)
+            page = msgspec.json.decode(response.read(), type=_Page)
+        found.update(str(issue.id) for issue in page.issues)
+        start += len(page.issues)
+        if start >= page.total or not page.issues:
+            return found
