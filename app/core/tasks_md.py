@@ -58,7 +58,7 @@ TODAY = "# Today"  # with its date: # Today 2026-10-18
 WAITING_ON = "waiting on:"
 LEFT_OFF = "left off:"
 HOME_QUICK = "home: quick"  # under the active task: it came from Quick, and goes back there
-ITEMS = {"focus": "a focus", "quick": "a quick item", "today": "a block"}  # no notes or steps
+PLAIN = {"focus": "a focus", "quick": "a quick item", "today": "a block"}  # no notes or steps
 STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
 MARKS: dict[str, StepState] = {" ": "open", "x": "done", "X": "done", ">": "skipped", "-": "left"}
 BOXES: dict[StepState, str] = {"open": " ", "done": "x", "skipped": ">", "left": "-"}
@@ -233,8 +233,8 @@ class _Reader:
     def _note(self, text: str) -> str:
         if self.section == "active":
             return self._home(text)
-        if self.section in ITEMS:
-            return f"{ITEMS[self.section]} can't have a note"
+        if self.section in PLAIN:
+            return f"{PLAIN[self.section]} can't have a note"
         if not self.parked or self.noted:
             return "a note goes on its own line under a parked task, one per task"
         match _reason(text):
@@ -274,7 +274,7 @@ class _Reader:
                 )
             case "active", FromQuick():
                 return _no_steps("quick")
-            case section, _ if section in ITEMS:
+            case section, _ if section in PLAIN:
                 return _no_steps(section)
             case _:
                 return "a step goes under a task"
@@ -282,7 +282,7 @@ class _Reader:
 
 
 def _no_steps(section: str) -> str:
-    return f"{ITEMS[section]} can't have steps"
+    return f"{PLAIN[section]} can't have steps"
 
 
 @dataclass(frozen=True)

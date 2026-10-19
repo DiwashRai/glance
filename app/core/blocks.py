@@ -183,7 +183,7 @@ def _end(start: time, hour: str, minute: str, rest: str) -> _Until | Refused:
 def _must(what: str) -> tuple[str, bool]:
     """A `!` (or `!!`) on its own at the end, as when typed, so `ship it!` stays a name."""
     words = what.split()
-    if any(_is_bang(word) for word in words[-1:]):
+    if words and _is_bang(words[-1]):
         return " ".join(words[:-1]), True
     return " ".join(words), False
 

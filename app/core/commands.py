@@ -277,12 +277,12 @@ def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
 
 
 def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | Rejected:
-    match lists.active, reason:
-        case _, Waiting(on=""):
-            return Rejected("wait on what?")
-        case Idle(), _:
+    if reason == Waiting(""):
+        return Rejected("wait on what?")
+    match lists.active:
+        case Idle():
             return Rejected("nothing is active")
-        case FromQuick() | Task(), _:
+        case FromQuick() | Task():
             return _set_aside(lists, reason, now)
 
 
