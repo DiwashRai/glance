@@ -6,6 +6,7 @@
     ],
     "handlers": [
       "glance.py",
+      "glance_cli.py",
       "update_status.py"
     ],
     "ui": [

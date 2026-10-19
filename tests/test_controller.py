@@ -122,6 +122,21 @@ def test_an_edit_after_opening_reloads_instead_of_guessing(tmp_path: Path) -> No
     assert glance.run("done").message == "finished edited by hand"
 
 
+def test_the_hud_sees_an_outside_change_but_a_typed_line_still_reloads_first(
+    tmp_path: Path,
+) -> None:
+    glance = controller(tmp_path)
+    glance.open()
+    glance.run("new first")
+    assert glance.saved() == Lists(Task("first"))
+    (tmp_path / "tasks.md").write_text("# Active\n- from an agent\n", encoding="utf-8")
+    assert glance.saved() == Lists(Task("from an agent"))
+    assert glance.lists == Lists(Task("first"))  # what the overlay shows is left alone
+    (tmp_path / "tasks.md").write_text("# Active\n- a\n- b\n", encoding="utf-8")
+    assert glance.saved() == Lists(Task("from an agent"))  # unreadable: the last good lists
+    assert glance.run("done").message == "tasks.md changed, run it again"
+
+
 @pytest.mark.parametrize(
     ("content", "problem"),
     [

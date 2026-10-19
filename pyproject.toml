@@ -18,10 +18,11 @@ dependencies = [
 dev = ["complexipy==8.0.1", "grimp", "import-linter", "pyright", "pytest", "ruff"]
 
 [project.scripts]
+glance = "glance_cli:main"
 glance-collector = "update_status:main"
 
 [tool.setuptools]
-py-modules = ["glance", "update_status"]
+py-modules = ["glance", "glance_cli", "update_status"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
@@ -77,6 +78,7 @@ max-complexity = 10
 "!app/core/**" = ["TID251"]
 # Entry points: the one place a broad except or print is allowed.
 "update_status.py" = ["BLE001", "T201"]
+"glance_cli.py" = ["T201"]
 "scripts/*.py" = ["T201"]
 "tests/*.py" = ["ARG"]
 

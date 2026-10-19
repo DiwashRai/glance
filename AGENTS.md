@@ -59,7 +59,7 @@ catch mistakes: no re-checking, no `isinstance` or `is None` just in case, no de
 - **Layers.** `app/core` is pure logic: no I/O, UI, processes, network or clock (import-linter and
   ruff enforce this). Pure text parsing, such as turning `tasks.md` into lists, belongs in core.
   The rest of `app/` is the boundary (providers, store, config, Windows calls), which does the
-  I/O. `glance.py` and `update_status.py` are entry points: the only place for a
+  I/O. `glance.py`, `glance_cli.py` and `update_status.py` are entry points: the only place for a
   broad `except` or `print`.
 - **Errors.** A provider catches its own failure and returns a result that says so. In the new
   app, everything else goes to the one error hook (`sys.excepthook`) that the app installs at

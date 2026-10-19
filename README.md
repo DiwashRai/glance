@@ -45,6 +45,13 @@ herdr pane, as if you'd typed it there; two or more spaces send it to `chief`. T
 agent's name turn yellow, or the note says in red that it isn't running (your text stays to send
 again). Replies are in the agent's pane. The names are `agents` in `[glance]`.
 
+**From the command line.** `glance` prints your lists, numbered the way commands count them, and
+`glance '<line>'` runs a line as if you'd typed it into the overlay: `glance 'quick reply to Sam'`
+(single quotes, so PowerShell leaves `$` alone).
+It's how your agents change your lists (`glance --skill` tells them how), so their changes are
+checked and logged like yours. The HUD shows a change within 2 seconds, and the overlay when it
+next opens. Install it once, from the glance folder: `uv tool install -e .`
+
 Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
 what happened is logged to `events.log` next to it.
 
