@@ -20,7 +20,7 @@ from app.ui.theme import styled
 from app.ui.timeline import TodayCard
 from app.win32.hotkey import held
 
-SIZE = QSize(1380, 480)  # board F's proportions
+SIZE = QSize(1560, 480)  # board F's, with the middle wider, for room to type to an agent
 PEEK_MS = 300  # Ctrl+Space held this long is a peek, not a tap
 WATCH_MS = 20  # how often the keys are checked while they're down
 
@@ -56,7 +56,7 @@ class Window(QWidget):
         self.watch = QTimer(self)
         self.watch.setInterval(WATCH_MS)
         self.watch.timeout.connect(self._watch_keys)
-        self.input.returnPressed.connect(self.run)
+        self.input.sent.connect(self.run)
         self.input.textChanged.connect(self._preview)
         QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.hide)
 
@@ -67,7 +67,7 @@ class Window(QWidget):
         inside.setSpacing(12)
         for widget in (self.active, self.prompt, self.message, hints):
             inside.addWidget(widget)
-        # As tall as everything it holds, measured once styled; it never grows or shrinks
+        # As tall as everything it holds, measured once styled; it grows, centred, as the box does
         centre.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         middle = QVBoxLayout()
         middle.addStretch()
@@ -166,8 +166,8 @@ class Window(QWidget):
         self.draw(view)
         self.controller.write_history()  # after drawing, so a failure here can't leave it stale
 
-    def _preview(self, text: str) -> None:
-        self.prompt.show_preview(self.controller.preview(text))
+    def _preview(self) -> None:
+        self.prompt.show_preview(self.controller.preview(self.input.text()))
 
     def draw(self, view: View) -> None:
         self.active.show_active(view.lists.active)
@@ -176,7 +176,7 @@ class Window(QWidget):
         parts.show_quick(self.quick, view.lists.quick)
         self.today.show_day(self.controller.day())
         self._say(view.problem or view.message, _tone(view))
-        self._preview(self.input.text())  # the lists may have changed under what's typed
+        self._preview()  # the lists may have changed under what's typed
 
     def show_error(self, message: str) -> None:
         """Called by the error hook. Redraws from what the controller holds (which is saved) and

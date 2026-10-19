@@ -107,7 +107,7 @@ QLabel[role="kbd"] {{
 }}
 QLabel[role="prompt-mark"] {{ color: {BLUE}; }}
 QLabel[tone="agent"] {{ color: {YELLOW}; }}
-QLineEdit {{
+QPlainTextEdit {{
     background: transparent; border: none; color: {BRIGHT}; selection-background-color: {SELECTION};
 }}
 QLabel[tone="done"] {{ color: {TEXT}; }}
