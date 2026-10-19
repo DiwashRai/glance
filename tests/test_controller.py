@@ -94,7 +94,7 @@ def test_a_line_that_means_something_else_by_enter_isnt_run(tmp_path: Path) -> N
     view = glance.run("review 9 for 1h")
     assert view.message.startswith("it's 09:01 now, which changes what that does")
     assert glance.preview("review 9 for 1h").note == "replaces deep"
-    assert glance.run("review 9 for 1h").message.endswith("removed deep 21:00-22:00")
+    assert glance.run("review 9 for 1h").message == "planned review 21:00-22:00 · replaces deep"
     clock[0] = NOW.replace(hour=23, minute=59)
     glance.preview("x 2pm for 1h")
     clock[0] += timedelta(minutes=2)  # tomorrow: a block then, not the one today it showed

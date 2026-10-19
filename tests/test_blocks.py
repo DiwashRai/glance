@@ -85,13 +85,13 @@ def deep(start: time, end: time) -> Block:
         (
             "call 2:30pm for 30m",
             (deep(time(14), time(14, 30)), deep(time(15), time(15, 30))),
-            "deep work now 14:00-14:30 and 15:00-15:30",
+            "trims deep work",
         ),
-        ("call 3pm for 1h", (deep(time(14), time(15)),), "deep work now 14:00-15:00"),
-        ("call 1pm for 1h30m", (deep(time(14, 30), time(15, 30)),), "deep work now 14:30-15:30"),
-        ("planning 1:30pm for 3h", (), "removed deep work 14:00-15:30"),
+        ("call 3pm for 1h", (deep(time(14), time(15)),), "trims deep work"),
+        ("call 1pm for 1h30m", (deep(time(14, 30), time(15, 30)),), "trims deep work"),
+        ("planning 1:30pm for 3h", (), "replaces deep work"),
         # the same name is cut back like any other: blocks are never merged or moved
-        ("Deep work 2pm for 1h", (deep(time(15), time(15, 30)),), "deep work now 15:00-15:30"),
+        ("Deep work 2pm for 1h", (deep(time(15), time(15, 30)),), "trims deep work"),
     ],
 )
 def test_a_newer_block_cuts_back_the_ones_it_lands_on(
@@ -115,7 +115,7 @@ def test_a_block_on_a_stale_plan_starts_todays() -> None:
     stale = Lists(plan=Plan(date(2026, 10, 17), (DEEP,)))
     result = applied(stale, "review 2:30pm for 1h")
     assert result.lists.plan == Plan(TODAY, (Block(time(14, 30), time(15, 30), "review"),))
-    assert result.message.endswith("replaces the plan for 2026-10-17")
+    assert result.message == "planned review 14:30-15:30"
     assert run(stale, "unblock 1") == Rejected("nothing is planned today")
 
 
@@ -170,8 +170,8 @@ def test_todays_plan_round_trips_in_tasks_md() -> None:
     )
     assert parse(text) == PLANNED
     assert render(PLANNED) == text
-    # By hand: any order, a length instead of an end, any spaces or tabs
-    hand = "# Today 2026-10-18\n- 17:30  1h\trun !\n- 14:00-15:30\tdeep work\n"
+    # By hand: any order, any spaces or tabs
+    hand = "# Today 2026-10-18\n- 17:30-18:30  \trun !\n- 14:00-15:30\tdeep work\n"
     assert parse(hand) == PLANNED
 
 
@@ -181,10 +181,11 @@ def test_todays_plan_round_trips_in_tasks_md() -> None:
         ("# Today\n", 1, "the date goes after Today, like '# Today 2026-10-18'"),
         ("# Today 2026-02-30\n", 1, "2026-02-30 isn't a real date"),
         ("# Today 2026-10-18\n# Today 2026-10-18\n", 2, "'# Today' appears twice"),
-        ("# Today 2026-10-18\n- deep work\n", 2, "a block starts with its time"),
+        ("# Today 2026-10-18\n- deep work\n", 2, "a block starts with its times"),
+        ("# Today 2026-10-18\n- 14:00 1h deep work\n", 2, "a block starts with its times"),
         # by hand, an overlap is a mistake: it isn't cut back like a typed block
-        ("# Today 2026-10-18\n- 14:00-15:00 a\n- 14:30 1h b\n", 3, "that overlaps 14:00-15:00 a"),
-        ("# Today 2026-10-18\n- 14:00 1h a\n  left off: x\n", 3, "a block can't have a note"),
+        ("# Today 2026-10-18\n- 14:00-15:00 a\n- 14:30-16:00 b\n", 3, "that overlaps 14:00-15:00"),
+        ("# Today 2026-10-18\n- 14:00-15:00 a\n  left off: x\n", 3, "a block can't have a note"),
     ],
 )
 def test_tasks_md_refuses_a_plan_it_cant_read(text: str, line: int, message: str) -> None:

@@ -8,16 +8,12 @@ import logging
 import os
 import sys
 import time
+import tomllib
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import msgspec
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 from app.config import Updater, default_config
 from app.providers import COUNTS

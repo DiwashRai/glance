@@ -1,2 +1,0 @@
-tomli; python_version < "3.11"
-msgspec>=0.22.0

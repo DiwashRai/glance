@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 import signal
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from PySide6.QtCore import QLockFile, QTimer
@@ -74,4 +74,4 @@ def config_path(home: Path, argv: list[str]) -> Path:
 
 def _now() -> datetime:
     """Local time with its UTC offset. The only clock read the lists ever see."""
-    return datetime.now(timezone.utc).astimezone()
+    return datetime.now(UTC).astimezone()

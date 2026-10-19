@@ -11,7 +11,7 @@ tables in the file belong to the collector (`update_status.py`).
 from __future__ import annotations
 
 import os
-import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
@@ -19,11 +19,6 @@ from typing import Annotated, Literal
 import msgspec
 
 from app.core.model import CommandWords, HudSettings
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 DEFAULT_WORDS = CommandWords()
 Word = Annotated[str, msgspec.Meta(pattern=r"^\S+\Z")]
