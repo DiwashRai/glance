@@ -262,7 +262,7 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "skip", "no steps to skip · step <text> adds one"),
         (DAY, "skip it", "skip moves past the current step: type just skip"),
         (DAY, "finish now", "finish finishes the active task: type just finish"),
-        (DAY, "rm 1129", "rm takes a row: f1 (focus), p1 (parked) or q1 (quick)"),
+        (DAY, "rm 1129", "rm f1, p1 or q1"),
         (DAY, "rm p3", "there's no p3 in parked"),
         (DAY, "rm q1", "there's no q1 in quick"),
         (DAY, "rm f1", "no focus matches '1'"),

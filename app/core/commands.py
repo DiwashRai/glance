@@ -376,7 +376,7 @@ def _remove(lists: Lists, row: str, now: datetime) -> Applied | Rejected:
     one from a name."""
     found = CARD_ROW.fullmatch(row)
     if not found:
-        return Rejected("rm takes a row: f1 (focus), p1 (parked) or q1 (quick)")
+        return Rejected("rm f1, p1 or q1")
     card, digits = found[1].lower(), found[2]
     if card == "f":
         return _unfocus(lists, digits, now)
