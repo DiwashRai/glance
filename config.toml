@@ -17,6 +17,7 @@
 # skip = ["skip", ">"]
 # finish = ["finish"]
 # unblock = ["unblock"]
+# remove = ["rm"]
 
 # [glance.hud]              # the counts on the taskbar, just left of the tray
 # look = "native"           # "native": drawn onto the taskbar; "box": a dark box
