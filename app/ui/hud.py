@@ -1,10 +1,12 @@
-"""The HUD: one row on the taskbar, just left of the tray. The active task (optional), then each
-count from the collector as a chip: its icon or label and its number, coloured by its source and
-its level.
+"""The HUD: one row on every taskbar, just left of the tray on the main one and of the clock on
+the others. Each count from the collector is a chip: its icon or label and its number, coloured
+by its source and its level. The main taskbar's row starts with the active task (optional): the
+others are narrower, and the app buttons come close.
 
-Every 2 seconds it hides while a full-screen app is in front, otherwise finds the tray, sits next
-to it and lifts itself back above the taskbar. It only redraws when what it shows has changed.
-Clicking it opens the overlay.
+Every 2 seconds, and when a monitor comes or goes, it finds the taskbars showing, sits on each
+and lifts itself back above them. One hides with its taskbar (a full-screen video or game on
+that monitor, or auto-hide). It only redraws when what it shows has changed. Clicking any of
+them opens the overlay.
 """
 
 from __future__ import annotations
@@ -13,14 +15,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QMouseEvent
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QMouseEvent, QScreen
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
 from app.core.model import HudSettings, Idle, Lists, Task, step_line, working
 from app.counts import Count, CountsFile
 from app.ui import icons, theme
-from app.win32.taskbar import NoTaskbar, Tray, find_tray, full_screen_app, lift, light_taskbar
+from app.win32.taskbar import Tray, find_taskbars, lift, light_taskbar
 
 TICK_MS = 2000
 GAP = 8  # between the HUD and the tray, in Qt pixels
@@ -40,7 +42,10 @@ class Shown:
     room: int  # the most the HUD may take, in Qt pixels
 
 
-class Hud(QWidget):
+class Hud:
+    """A bar on each taskbar, all showing the same. A bar is made when a taskbar first appears,
+    and hides with it."""
+
     def __init__(
         self,
         settings: HudSettings,
@@ -48,10 +53,40 @@ class Hud(QWidget):
         counts_file: Path,
         clicked: Callable[[], None],
     ) -> None:
-        super().__init__()
         self.settings = settings
         self.lists = lists
         self.counts = CountsFile(counts_file)
+        self.clicked = clicked
+        self.bars: list[_Bar] = []
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.tick)
+
+    def start(self) -> None:
+        """The first check runs once the app is running, so a problem in it (a bad counts file,
+        say) is shown in the overlay instead of stopping glance from starting."""
+        QTimer.singleShot(0, self.tick)
+        self.timer.start(TICK_MS)
+
+    def tick(self) -> None:
+        trays = find_taskbars()
+        while len(self.bars) < len(trays):
+            self.bars.append(_Bar(self.settings, self.clicked))
+        showing = [(bar, tray) for bar, tray in zip(self.bars, trays, strict=False) if tray.showing]
+        for bar in set(self.bars) - {bar for bar, _ in showing}:
+            bar.hide()
+        if showing:
+            active = _active_title(working(self.lists().active))
+            counts, light = self.counts.read(), light_taskbar()
+            for bar, tray in showing:
+                bar.show_on(tray, active if tray.main else "", counts, light)
+
+
+class _Bar(QWidget):
+    """The HUD on one taskbar."""
+
+    def __init__(self, settings: HudSettings, clicked: Callable[[], None]) -> None:
+        super().__init__()
+        self.settings = settings
         self.clicked = clicked
         self.shown = Shown("", (), light=False, room=0)
         self.setWindowTitle("glance HUD")
@@ -73,40 +108,22 @@ class Hud(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self.frame)
         self.items: list[QWidget] = []
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.tick)
 
-    def start(self) -> None:
-        """The first check runs once the app is running, so a problem in it (a bad counts file,
-        say) is shown in the overlay instead of stopping glance from starting."""
-        QTimer.singleShot(0, self.tick)
-        self.timer.start(TICK_MS)
-
-    def tick(self) -> None:
-        if full_screen_app():
-            self.hide()
-            return
-        match find_tray():
-            case NoTaskbar():
-                self.hide()
-            case Tray() as tray:
-                scale = QGuiApplication.primaryScreen().devicePixelRatio()
-                self._redraw_if_changed(room=int(tray.width / scale * MAX_SHARE))
-                self._place(tray, scale)
-                self.show()
-                lift(int(self.winId()))
+    def show_on(self, tray: Tray, active: str, counts: tuple[Count, ...], light: bool) -> None:
+        screen = _screen(tray)
+        room = int(tray.width / screen.devicePixelRatio() * MAX_SHARE)
+        shown = Shown(active, counts, light, room)
+        if shown != self.shown:
+            self.shown = shown
+            self._draw(shown)
+        self._place(tray, screen)
+        self.show()
+        lift(int(self.winId()))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         super().mousePressEvent(event)
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked()
-
-    def _redraw_if_changed(self, room: int) -> None:
-        active = _active_title(working(self.lists().active))
-        shown = Shown(active, self.counts.read(), light_taskbar(), room)
-        if shown != self.shown:
-            self.shown = shown
-            self._draw(shown)
 
     def _draw(self, shown: Shown) -> None:
         """The counts go in first. The active task then goes in front of them, shortened to the
@@ -132,14 +149,26 @@ class Hud(QWidget):
             self.row.insertWidget(0, self.items[0], alignment=Qt.AlignmentFlag.AlignVCenter)
             self.items[0].show()
 
-    def _place(self, tray: Tray, scale: float) -> None:
-        """Tray rectangles are in real pixels; the main taskbar is on the primary screen."""
+    def _place(self, tray: Tray, screen: QScreen) -> None:
+        """Tray rectangles are in real pixels. Qt keeps each screen's top-left corner where it
+        really is, and scales what's inside it by the screen's own factor."""
+        origin, scale = screen.geometry().topLeft(), screen.devicePixelRatio()
         height = int(tray.height / scale * HEIGHT_SHARE)
         self.setFixedHeight(height)
         self.adjustSize()
-        x = int(tray.left / scale) - self.width() - GAP
-        y = int((tray.top + tray.height / 2) / scale - height / 2)
+        x = origin.x() + int((tray.left - origin.x()) / scale) - self.width() - GAP
+        y = origin.y() + int((tray.top + tray.height / 2 - origin.y()) / scale - height / 2)
         self.move(x, y)
+
+
+def _screen(tray: Tray) -> QScreen:
+    """The screen a taskbar is on, found by where it really is."""
+    inside = QPoint(tray.left - 1, tray.top + tray.height // 2)
+    for screen in QGuiApplication.screens():
+        logical = screen.geometry()
+        if QRect(logical.topLeft(), logical.size() * screen.devicePixelRatio()).contains(inside):
+            return screen
+    return QGuiApplication.primaryScreen()
 
 
 @dataclass(frozen=True)
