@@ -13,6 +13,7 @@ from app.core.commands import (
     Focus,
     New,
     Park,
+    Preview,
     Quick,
     Rejected,
     Remove,
@@ -22,6 +23,7 @@ from app.core.commands import (
     Unfocus,
     apply,
     parse_command,
+    preview,
 )
 from app.core.model import (
     CommandWords,
@@ -303,6 +305,15 @@ def test_rm_takes_a_row_off_its_card_and_leaves_the_rest(
     assert result.events == (Event(NOW, "removed", event, f"from {said}"),)
     assert result.message.startswith(f"removed {event}")
     assert applied(FOCUSED, "rm f2").lists.focus == GOALS[:1]  # as unfocus 2 does
+
+
+@pytest.mark.parametrize(
+    ("text", "note"),
+    [("rm p2", "removes tidy logging config"), ("rm q9", "there's no q9 in quick")],
+)
+def test_rm_says_what_it_would_remove_before_enter(text: str, note: str) -> None:
+    """It can't be undone, and the cards number Parked 1, 2…, not p1, p2…"""
+    assert preview(text, WORDS, QUICK_DAY, NOW) == Preview(((0, 2),), note)
 
 
 def test_a_quick_item_switched_to_goes_back_to_quick_unless_it_gains_a_note() -> None:

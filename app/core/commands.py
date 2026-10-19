@@ -182,14 +182,22 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
 
 def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Preview:
     """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
-    the command before it runs. A block's time, length and `!` are marked, with what it cuts."""
+    the command before it runs. A block's time, length and `!` are marked, with what it cuts, and
+    `rm` says what it would remove, as that can't be undone."""
+    word = tuple(found.span() for found in blocks.WORD.finditer(text))[:1]
     match parse_command(text, words):
         case Ask(agent=agent):
             return Preview(agent=agent, note=agent)
         case Typed():
             return _preview_block(lists, text, now)
+        case Remove() as remove:
+            match apply(lists, remove, now):
+                case Applied(events=events):
+                    return Preview(word, f"removes {events[0].title}")
+                case Rejected(reason=reason):
+                    return Preview(word, reason)
         case _:
-            return Preview(tuple(word.span() for word in blocks.WORD.finditer(text))[:1])
+            return Preview(word)
 
 
 def _preview_block(lists: Lists, text: str, now: datetime) -> Preview:
