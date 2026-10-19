@@ -70,11 +70,13 @@ class Tray:
     height: int
     width: int  # the whole taskbar's, to keep the HUD a modest share of it
     main: bool  # the one with the tray, where the HUD has the most room
+    showing: bool  # on screen and on top: see _showing
 
 
 def find_taskbars() -> tuple[Tray, ...]:
-    """The taskbars showing, the main one first, then the others from left to right, so each
-    keeps its HUD. None while Explorer is restarting."""
+    """Every taskbar along the bottom or top of a monitor, the main one first, then the others
+    from left to right: one hiding doesn't move the others, so each keeps its HUD. None while
+    Explorer is restarting."""
     main = _user32.FindWindowW("Shell_TrayWnd", None)
     tray = _user32.FindWindowExW(main, None, "TrayNotifyWnd", None)
     icons = wintypes.RECT()
@@ -87,25 +89,31 @@ def find_taskbars() -> tuple[Tray, ...]:
         found.append((other, bar, bar.right - round((bar.bottom - bar.top) * CLOCK_SHARE)))
         other = _user32.FindWindowExW(None, other, "Shell_SecondaryTrayWnd", None)
     trays = [
-        Tray(left, bar.top, bar.bottom - bar.top, bar.right - bar.left, window == main)
+        Tray(
+            left=left,
+            top=bar.top,
+            height=bar.bottom - bar.top,
+            width=bar.right - bar.left,
+            main=window == main,
+            showing=_showing(window, bar),
+        )
         for window, bar, left in found
-        if _showing(window, bar)
+        if bar.right - bar.left > bar.bottom - bar.top  # not up the side, nor empty
     ]
     return tuple(sorted(trays, key=lambda each: (not each.main, each.left, each.top)))
 
 
 def _showing(window: int, bar: wintypes.RECT) -> bool:
-    """Along the bottom or top of its monitor, all of it on there (not slid away: auto-hide) and
-    on top. Explorer takes a taskbar off the top while a full-screen window (a video, a game)
-    covers its monitor, whichever window is in front; the HUD goes with it."""
+    """All of it on its monitor (not slid away: auto-hide) and on top. Explorer takes a taskbar
+    off the top while a full-screen window (a video, a game) covers its monitor, whichever window
+    is in front; the HUD goes with it."""
     info = _MonitorInfo(cbSize=ctypes.sizeof(_MonitorInfo))
     monitor = _user32.MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST)
     _user32.GetMonitorInfoW(monitor, ctypes.byref(info))
     screen = info.rcMonitor
     on_screen = screen.left <= bar.left and bar.right <= screen.right
     on_screen = on_screen and screen.top <= bar.top and bar.bottom <= screen.bottom
-    on_top = _user32.GetWindowLongW(window, GWL_EXSTYLE) & WS_EX_TOPMOST
-    return on_screen and bar.right - bar.left > bar.bottom - bar.top and bool(on_top)
+    return on_screen and bool(_user32.GetWindowLongW(window, GWL_EXSTYLE) & WS_EX_TOPMOST)
 
 
 class _MonitorInfo(ctypes.Structure):

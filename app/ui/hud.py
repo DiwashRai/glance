@@ -43,8 +43,8 @@ class Shown:
 
 
 class Hud:
-    """A bar on each taskbar, all showing the same. Bars are made as monitors appear, and hidden
-    when there are fewer taskbars than bars."""
+    """A bar on each taskbar, all showing the same. A bar is made when a taskbar first appears,
+    and hides with it."""
 
     def __init__(
         self,
@@ -71,12 +71,13 @@ class Hud:
         trays = find_taskbars()
         while len(self.bars) < len(trays):
             self.bars.append(_Bar(self.settings, self.clicked))
-        for bar in self.bars[len(trays) :]:
+        showing = [(bar, tray) for bar, tray in zip(self.bars, trays, strict=False) if tray.showing]
+        for bar in set(self.bars) - {bar for bar, _ in showing}:
             bar.hide()
-        if trays:
+        if showing:
             active = _active_title(working(self.lists().active))
             counts, light = self.counts.read(), light_taskbar()
-            for bar, tray in zip(self.bars, trays, strict=False):
+            for bar, tray in showing:
                 bar.show_on(tray, active if tray.main else "", counts, light)
 
 
