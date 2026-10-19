@@ -2,7 +2,9 @@
 theme, and whether a full-screen app is in front. Rectangles are in real pixels.
 
 Findings from the spike: `Shell_TrayWnd` is the main taskbar and its `TrayNotifyWnd` child is the
-tray (icons and clock). Other monitors' taskbars have no tray, so the HUD uses the main one.
+tray (icons and clock). Each other monitor's taskbar is a `Shell_SecondaryTrayWnd` with no tray:
+Windows 11 draws just a clock at its right end, which isn't a window, so its room is set aside by
+the taskbar's height (CLOCK_SHARE).
 """
 
 from __future__ import annotations
@@ -50,11 +52,14 @@ HKEY_CURRENT_USER = 0x80000001
 RRF_RT_REG_DWORD = 0x00000010
 THEME_KEY = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
 QUNS_FULL_SCREEN = {2, 3, 4}  # busy (full-screen app), D3D full screen, presentation mode
+# Another monitor's clock, two lines of time and date, starts 1.5 taskbar heights from its right
+# edge (measured on Windows 11 at 100%); this leaves a little more
+CLOCK_SHARE = 1.8
 
 
 @dataclass(frozen=True)
 class Tray:
-    """Where the HUD goes: just left of `left`, centred in the taskbar's height."""
+    """A taskbar, and where the HUD goes on it: just left of `left`, centred in its height."""
 
     left: int
     top: int
@@ -62,18 +67,31 @@ class Tray:
     width: int  # the whole taskbar's, to keep the HUD a modest share of it
 
 
-@dataclass(frozen=True)
-class NoTaskbar:
-    """Explorer is restarting, or the taskbar can't be found."""
+def find_taskbars() -> tuple[Tray, ...]:
+    """The main taskbar, by its tray, then any other monitors' taskbars, by their clock. None
+    while Explorer is restarting."""
+    main = _user32.FindWindowW("Shell_TrayWnd", None)
+    tray = _user32.FindWindowExW(main, None, "TrayNotifyWnd", None)
+    icons = wintypes.RECT()
+    if not (tray and _user32.GetWindowRect(tray, icons)):
+        return ()
+    bars = [(_rect(main), icons.left)]
+    other = _user32.FindWindowExW(None, None, "Shell_SecondaryTrayWnd", None)
+    while other:
+        bar = _rect(other)
+        bars.append((bar, bar.right - round((bar.bottom - bar.top) * CLOCK_SHARE)))
+        other = _user32.FindWindowExW(None, other, "Shell_SecondaryTrayWnd", None)
+    return tuple(
+        Tray(left, bar.top, bar.bottom - bar.top, bar.right - bar.left)
+        for bar, left in bars
+        if bar.bottom > bar.top  # empty: it closed as it was found
+    )
 
 
-def find_tray() -> Tray | NoTaskbar:
-    taskbar = _user32.FindWindowW("Shell_TrayWnd", None)
-    tray = _user32.FindWindowExW(taskbar, None, "TrayNotifyWnd", None)
-    bar, icons = wintypes.RECT(), wintypes.RECT()
-    if not (tray and _user32.GetWindowRect(taskbar, bar) and _user32.GetWindowRect(tray, icons)):
-        return NoTaskbar()
-    return Tray(icons.left, bar.top, bar.bottom - bar.top, bar.right - bar.left)
+def _rect(window: int) -> wintypes.RECT:
+    rect = wintypes.RECT()
+    _user32.GetWindowRect(window, ctypes.byref(rect))
+    return rect
 
 
 def lift(window_id: int) -> None:
