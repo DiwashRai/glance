@@ -24,6 +24,7 @@ from app.core.commands import (
     apply,
     parse_command,
     preview,
+    spaces_for,
 )
 from app.core.model import (
     CommandWords,
@@ -107,6 +108,13 @@ def test_words_come_from_settings() -> None:
     assert parse_command("park notes", words) == Typed("park notes")
     # with one agent, any number of spaces is for it
     assert parse_command("  x", CommandWords(agents=("me",))) == Ask("me", "x")
+
+
+def test_a_reply_offered_with_spaces_goes_to_that_agent() -> None:
+    """The message card shows how many spaces answer its sender."""
+    for agent in WORDS.agents:
+        assert parse_command(" " * spaces_for(agent, WORDS) + "yes", WORDS) == Ask(agent, "yes")
+    assert spaces_for("backup-script", WORDS) == 0  # not an agent: no reply offered
 
 
 @pytest.mark.parametrize(

@@ -6,6 +6,7 @@ import pytest
 import glance_cli
 from app.core.model import CommandWords
 from app.core.skill import skill
+from app.store import Store
 
 NOW = datetime(2026, 10, 19, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
 
@@ -55,12 +56,26 @@ def test_a_refused_line_says_why_and_changes_nothing(
     assert not (config.parent / "data" / "tasks.md").exists()
 
 
+def test_from_leaves_the_owner_a_message_never_a_task(
+    config: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert glance(config, "--from", "chief", "notes are\n ready") == 0
+    assert capsys.readouterr().out == "left for the owner in glance\n"
+    assert glance(config, "--from", "chief", "x" * 301) == 1
+    assert capsys.readouterr().err.startswith("a message is 300 characters at most")
+    data = config.parent / "data"
+    (message,) = Store(data).inbox()
+    assert (message.sender, message.at, message.text) == ("chief", "09:58", "notes are ready")
+    assert not (data / "tasks.md").exists()
+
+
 @pytest.mark.parametrize(
     "argv",
     [
         ["--config", "missing.toml", "quick x"],  # never the defaults: they'd be the real lists
         ["quick", "x", "--skill"],
         ["-x"],
+        ["--from", "", "release notes are ready"],  # a script's empty name: never run as a line
     ],
 )
 def test_a_mistyped_command_runs_nothing(argv: list[str]) -> None:

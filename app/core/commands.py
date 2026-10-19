@@ -180,6 +180,12 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
     return Typed(text)
 
 
+def spaces_for(agent: str, words: CommandWords) -> int:
+    """How many spaces start a line for `agent`, the other way round from `parse_command`: 0 for
+    one that lines don't go to."""
+    return words.agents.index(agent) + 1 if agent in words.agents else 0
+
+
 def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Preview:
     """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
     the command before it runs. A block's time, length and `!` are marked, with what it cuts, and

@@ -89,9 +89,11 @@ QFrame[role="idle"] {{
 QFrame[role="prompt"] {{
     background: {PROMPT}; border: 1px solid {PROMPT_EDGE}; border-radius: 14px;
 }}
+QFrame[role="inbox"] {{ background: {CARD}; border: 1px solid {YELLOW}; border-radius: 14px; }}
 QLabel {{ background: transparent; border: none; }}
 QLabel[role="header"] {{ color: {DIM}; }}
 QLabel[role="active-header"] {{ color: {ORANGE}; }}
+QLabel[role="inbox-header"] {{ color: {YELLOW}; }}
 QLabel[role="title"] {{ color: {BRIGHT}; }}
 QLabel[role="dim"] {{ color: {DIM}; }}
 QLabel[role="number"] {{ color: {NUMBER}; }}

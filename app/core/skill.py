@@ -42,6 +42,14 @@ edit tasks.md by hand.
 
 {examples}
 
+To tell the owner something (you've finished, or you need them), leave a message in glance. It
+waits on their taskbar until they've read it:
+
+  glance --from <your name> '<a sentence or two>'
+
+300 characters at most: put more in a file and give its path. If you're {agents}, use that
+name: the owner can then answer you from glance.
+
 - One glance command at a time, never in parallel: two at once can lose a change.
 - Single quotes, with any ' inside doubled: in double quotes PowerShell changes $ and `.
 - A line with no command word plans a block if it ends in a time and a length, and otherwise
@@ -67,7 +75,7 @@ def skill(words: CommandWords) -> str:
     quoted = [(f"'{_renamed(line, renamed).replace("'", "''")}'", does) for line, does in EXAMPLES]
     width = max(len(line) for line, _ in quoted)
     examples = (f"  glance {line:<{width}}  {does}" for line, does in quoted)
-    return SKILL.format(examples="\n".join(examples))
+    return SKILL.format(examples="\n".join(examples), agents=" or ".join(words.agents))
 
 
 def _renamed(line: str, renamed: dict[str, str]) -> str:

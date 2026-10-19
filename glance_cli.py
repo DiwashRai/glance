@@ -1,9 +1,10 @@
 """glance on the command line, for the owner's agents (and the owner). Usage:
 
-    glance                 the lists, numbered the way commands count them
-    glance '<line>'        runs a line as if it were typed into the overlay
-    glance --skill         how to use it, for an agent
-    glance --config PATH   another config file, before or after any of those
+    glance                       the lists, numbered the way commands count them
+    glance '<line>'              runs a line as if it were typed into the overlay
+    glance --from NAME '<text>'  leaves the owner a message, shown until they clear it
+    glance --skill               how to use it, for an agent
+    glance --config PATH         another config file, before or after any of those
 
 It goes through the same controller as the overlay: the same checks, saved to tasks.md and
 logged to events.log the same way. It runs beside the app, which notices the change.
@@ -26,6 +27,7 @@ from app.core.skill import skill
 from app.store import Store
 
 HOME = Path(__file__).resolve().parent  # where config.toml is
+MESSAGE_MOST = 300  # characters: a few lines in the overlay
 
 
 def main() -> int:
@@ -49,6 +51,8 @@ def run(argv: list[str], now: Callable[[], datetime]) -> int:
     if args.skill:
         print(skill(settings.words))
         return 0
+    if args.sender:
+        return _tell(Store(settings.data_folder), args.sender, line, now())
     controller = Controller(Store(settings.data_folder), settings.words, now, _NotSent())
     opened = controller.open()
     if opened.problem:
@@ -66,6 +70,18 @@ def run(argv: list[str], now: Callable[[], datetime]) -> int:
     return 0
 
 
+def _tell(store: Store, sender: str, line: str, at: datetime) -> int:
+    """One line, so it fits the overlay's message card."""
+    text = " ".join(line.split())
+    if not text or len(text) > MESSAGE_MOST:
+        too_long = f"is {MESSAGE_MOST} characters at most: put more in a file and give its path"
+        print(f"a message {too_long if text else 'needs some text'}", file=sys.stderr)
+        return 1
+    store.tell(sender, text, at)
+    print("left for the owner in glance")
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     """Options go before or after the line, not inside it; a line that starts with - goes
     after --."""
@@ -76,8 +92,22 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", default="", help="default: config.local.toml or config.toml")
     parser.add_argument("--skill", action="store_true", help="how to use glance, for an agent")
+    parser.add_argument(
+        "--from",
+        dest="sender",
+        type=_name,
+        metavar="NAME",
+        help="the line is a message for the owner, from you",
+    )
     parser.add_argument("line", nargs="*", help="a line, as typed into glance")
     return parser
+
+
+def _name(text: str) -> str:
+    """Who a message is from. Never blank: a blank one would run the message as a line."""
+    if not text.strip():
+        raise argparse.ArgumentTypeError("give your name, like chief")
+    return text.strip()
 
 
 class _NotSent:

@@ -5,6 +5,11 @@ the `View` it gets back. `glance` on the command line does the same for one line
 for `saved()`. A change is saved to tasks.md first and only then kept in memory, so
 what's shown never gets ahead of what's saved. The window writes the history (`write_history()`)
 after drawing, so a failed history write can't leave the window showing stale lists.
+
+Messages for me wait in `inbox`, oldest first, read again on each open and whenever the app sees
+the inbox change. The top one is cleared by Enter on an empty line, or by answering whoever sent
+it. Oldest first, so one that comes in while I'm reading goes to the back, and what Enter clears
+is always the one shown.
 """
 
 from __future__ import annotations
@@ -25,7 +30,7 @@ from app.core.commands import (
     parse_command,
     preview,
 )
-from app.core.model import CommandWords, Event, Lists
+from app.core.model import CommandWords, Event, Lists, Message
 from app.store import NO_FILE, Snapshot, Store, Unreadable
 
 
@@ -66,10 +71,12 @@ class Controller:
         self.log: today.Log = today.NOTHING_YET  # events.log as last read, plus what's since
         self.previewed = ("", Preview())  # the line last previewed, and what it showed
         self.seen = (NO_FILE, Lists())  # tasks.md as the HUD last read it
+        self.inbox: tuple[Message, ...] = ()  # messages for me, oldest first, as last read
 
     def open(self) -> View:
-        """Read tasks.md and events.log again: either may have changed since the window was
-        last shown. Whether the agents are running is checked again too, when next needed."""
+        """Read tasks.md, events.log and the inbox again: any may have changed since the window
+        was last shown. Whether the agents are running is checked again too, when next needed."""
+        self.read_inbox()
         self.log = self.store.history()
         self.trouble = {}
         match self.store.load():
@@ -95,11 +102,16 @@ class Controller:
                 self.seen = (stamp, lists)
         return self.seen[1]
 
+    def read_inbox(self) -> None:
+        self.inbox = self.store.inbox()
+
     def run(self, text: str) -> View:
         match parse_command(text, self.words):
             case Ask(agent=agent, text=asked):
                 return self._ask(agent, asked)
             case _ if not text.strip():
+                if self.inbox:
+                    self._clear_top()
                 return View(self.lists, problem=self.problem)
             case command:
                 return self._apply(text, command)
@@ -113,7 +125,13 @@ class Controller:
         self.trouble[agent] = why
         if why:
             return View(self.lists, problem=why)
+        if self.inbox and self.inbox[0].sender == agent:  # answered, so read
+            self._clear_top()
         return View(self.lists, f"sent to {agent}", self.problem, accepted=True)
+
+    def _clear_top(self) -> None:
+        self.store.clear(self.inbox[0])
+        self.inbox = self.inbox[1:]
 
     def _apply(self, text: str, command: Command) -> View:
         if self.store.stamp() != self.stamp:

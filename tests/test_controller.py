@@ -66,6 +66,25 @@ def test_spaces_first_send_the_line_to_an_agent_and_nothing_else(tmp_path: Path)
     assert not (tmp_path / "tasks.md").exists()
 
 
+def test_enter_on_an_empty_line_clears_the_top_message_and_so_does_answering_it(
+    tmp_path: Path,
+) -> None:
+    store = Store(tmp_path)
+    for minute, sender in enumerate(("chief", "assistant", "chief")):
+        store.tell(sender, f"message {minute}", NOW + timedelta(minutes=minute))
+    agents = Agents("assistant", "chief")
+    glance = controller(tmp_path, agents)
+    glance.open()
+    glance.run(" for assistant")  # chief's is on top: answering someone else leaves it
+    assert [message.text for message in glance.inbox] == ["message 0", "message 1", "message 2"]
+    glance.run("  yes, post them")
+    glance.run("")
+    assert [message.text for message in store.inbox()] == ["message 2"]  # gone from disk too
+    agents.up.discard("chief")
+    glance.run("  not sent")  # so not answered
+    assert len(glance.inbox) == 1
+
+
 def test_an_agent_that_isnt_running_is_shown_in_red_and_keeps_the_line(tmp_path: Path) -> None:
     agents = Agents("chief")
     glance = controller(tmp_path, agents)

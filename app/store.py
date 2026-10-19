@@ -1,4 +1,5 @@
-"""Reading and writing glance's files: tasks.md (the lists) and events.log (what happened).
+"""Reading and writing glance's files: tasks.md (the lists), events.log (what happened) and the
+inbox (messages for me).
 
 The only module that touches the disk. It moves text in and out; turning text into lists is
 core's job (`app.core.tasks_md`).
@@ -7,16 +8,22 @@ core's job (`app.core.tasks_md`).
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from app.core import events_log, tasks_md
 from app.core.events_log import History
-from app.core.model import Event, Lists, Problem
+from app.core.model import Event, Lists, Message, Problem
 
 TASKS_FILE = "tasks.md"
 EVENTS_FILE = "events.log"
+# A file for each message, holding its text, named by when it came (to the microsecond, so they
+# sort oldest first) and who from: 20261019-124100123456-chief.txt
+INBOX_FOLDER = "inbox"
+MESSAGE_FILE = re.compile(r"\d{8}-(\d\d)(\d\d)\d{8}-(.+)\.txt")
 # How much of the end of events.log is read: about two months, parsed in under 10 ms. A task
 # still active from before that (or a day of more than about 3000 events) loses its start.
 EVENTS_TAIL = 256 * 1024
@@ -50,6 +57,7 @@ class Store:
         self.folder = folder
         self.tasks_path = folder / TASKS_FILE
         self.events_path = folder / EVENTS_FILE
+        self.inbox_path = folder / INBOX_FOLDER
 
     def stamp(self) -> Stamp:
         if not self.tasks_path.exists():
@@ -100,6 +108,30 @@ class Store:
             problem = _not_utf8(text)
             return Problem(problem.line + first - 1, problem.message)
         return events_log.parse(text, first)
+
+    def tell(self, sender: str, text: str, at: datetime) -> None:
+        """A message for me, into the inbox: written beside it first, then moved in whole, so the
+        app never reads half of one."""
+        self.inbox_path.mkdir(parents=True, exist_ok=True)
+        name = f"{at:%Y%m%d-%H%M%S%f}-{sender}.txt"
+        temp = self.folder / f"{name}.tmp"
+        temp.write_text(text, encoding="utf-8")
+        os.replace(temp, self.inbox_path / name)
+
+    def inbox(self) -> tuple[Message, ...]:
+        """The messages waiting for me, oldest first. Creates the folder, so the app can watch
+        it. Anything else in it is left alone."""
+        self.inbox_path.mkdir(parents=True, exist_ok=True)
+        messages: list[Message] = []
+        for path in sorted(self.inbox_path.iterdir()):
+            if found := MESSAGE_FILE.fullmatch(path.name):
+                text = path.read_text(encoding="utf-8", errors="replace")
+                messages.append(Message(found[3], f"{found[1]}:{found[2]}", text, path.name))
+        return tuple(messages)
+
+    def clear(self, message: Message) -> None:
+        """Its file is deleted, so once I've cleared them all the inbox is empty again."""
+        (self.inbox_path / message.key).unlink(missing_ok=True)
 
 
 def _not_utf8(text: str) -> Problem:

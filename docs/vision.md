@@ -125,7 +125,7 @@ Keys in the overlay and on drop cards:
 | Key | Does |
 |---|---|
 | Ctrl+Space | Tap: open the overlay to type. Hold (300 ms or more): peek without taking the focus, and it hides on release. |
-| ↵ | Run the command. On an empty text box: accept the suggestion shown. |
+| ↵ | Run the command. On an empty text box: clear the message shown (see Messages for me), or accept the suggestion shown. |
 | Esc | Close or dismiss |
 | `b` | Break the selected task into steps |
 | `?` | Ask what to do next |
@@ -177,6 +177,20 @@ ignore the dot, or if it's urgent. This applies to every nudge, including change
 We choose how nudges look by building animated prototypes and comparing them. First round: the drop
 card won clearly. It springs out of the HUD and offers one-key answers like resume, switch, break it
 down, do it now. Lead with the task, not a greeting: "Back to 1135?", not "Welcome back".
+
+## Messages for me
+
+Agents (or any script) leave me a message with `glance --from chief '<a sentence or two>'`: 300
+characters at most, with anything longer in a file it names. It doesn't depend on herdr or any
+other agent system.
+
+- A yellow chip on the HUD says who the oldest is from, and how many more: `● chief +2`.
+- The overlay shows the oldest in a yellow-edged card under the middle one, and grows to fit it.
+  Oldest first, so one that comes in while I'm reading goes to the back.
+- ↵ on an empty line clears it and shows the next. Answering its sender with the space prefix
+  clears it too; the card shows the prefix (`␣␣ reply`).
+- Each message is its own file in `inbox/`, deleted when cleared, so the folder is empty once
+  I've read them all. The app watches the folder, so a message shows as soon as it comes.
 
 ## Planning the day
 
@@ -299,6 +313,7 @@ Plain files on each machine, kept out of OneDrive-synced folders:
   block moved), one line per event, lined up in columns. Gives "what did I do today" and planned
   vs actual time.
 - `notes.md`: the agent's notes on how I work. I can read and edit it.
+- `inbox/`: messages for me, a file each, until I clear them (see Messages for me).
 
 Todoist is read, never written. Tasks due today, and anything I capture on my phone (the Todoist
 inbox), show up in glance for me to sort into lists. Personal reminders stay in Todoist. No glance
@@ -352,8 +367,8 @@ lists on my phone.
 
 **Built so far:** only herdr, and only as if I'd typed into the agent's pane
 (`herdr agent prompt <name> "<text>"`): one space for `assistant`, two for `chief`. There's no
-fallback, request ID or reply in glance yet; the answer stays in the agent's pane. The plan below
-is where it may go.
+fallback or request ID yet. An agent answers in its pane, or leaves me a message in glance with
+`glance --from` (see Messages for me). The plan below is where it may go.
 
 Two ways, chosen in settings, behind one small interface (like providers today):
 

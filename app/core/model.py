@@ -238,6 +238,17 @@ class Problem:
 
 
 @dataclass(frozen=True)
+class Message:
+    """One for me in the inbox, from an agent or a script (`glance --from chief '...'`), until I
+    clear it."""
+
+    sender: str
+    at: str  # when it came: 12:41
+    text: str
+    key: str  # which one it is in the inbox, so clearing it clears that one
+
+
+@dataclass(frozen=True)
 class HudSettings:
     """How the HUD on the taskbar looks."""
 

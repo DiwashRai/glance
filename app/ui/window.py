@@ -1,6 +1,7 @@
 """The overlay, laid out as board F: Focus above Parked on the left; Active, the prompt, the
 message line and the key hints in the middle; Today above Quick on the right.
-The cards float over the screen, which is dimmed behind them.
+The cards float over the screen, which is dimmed behind them. While a message for me is waiting,
+its card sits under the middle one, and the overlay grows to fit it.
 
 Ctrl+Space opens it to type; held, it's a peek that hides when the keys are let go. Ctrl+Space
 again, Esc, or clicking anywhere else, hides it. It only talks to the controller.
@@ -21,6 +22,7 @@ from app.ui.timeline import TodayCard
 from app.win32.hotkey import held
 
 SIZE = QSize(1560, 480)  # board F's, with the middle wider, for room to type to an agent
+GAP = 16  # between the middle card and the message card under it
 PEEK_MS = 300  # Ctrl+Space held this long is a peek, not a tap
 WATCH_MS = 20  # how often the keys are checked while they're down
 
@@ -47,6 +49,7 @@ class Window(QWidget):
         self.active = parts.ActiveCard()
         self.prompt = parts.Prompt()
         self.message = parts.message_line()
+        self.inbox = parts.InboxCard()
         self.input = self.prompt.input
         self._lay_out(parts.hints(controller.words))
 
@@ -70,8 +73,10 @@ class Window(QWidget):
         # As tall as everything it holds, measured once styled; it grows, centred, as the box does
         centre.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         middle = QVBoxLayout()
+        middle.setSpacing(GAP)
         middle.addStretch()
         middle.addWidget(centre)
+        middle.addWidget(self.inbox)
         middle.addStretch()
         panel = styled(QFrame(), "panel")
         columns = QHBoxLayout(panel)
@@ -91,6 +96,7 @@ class Window(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(panel)
+        self.layouts = (outer, columns)
 
     def pressed(self) -> None:
         """Ctrl+Space. If I'm using it, or the last press hasn't settled (still watched, or its
@@ -132,11 +138,24 @@ class Window(QWidget):
 
     def _show_on(self, area: QRect) -> None:
         """In the middle of `area`, in front, with the rest of it dimmed."""
-        self.setFixedSize(SIZE.boundedTo(area.size()))  # never jumps; smaller on a small screen
-        self.move(area.center() - self.rect().center())
+        self._fit(area)
         self.backdrop.cover(area)
         self.show()
         self.raise_()
+
+    def _fit(self, area: QRect) -> None:
+        """SIZE in the middle of `area`, smaller on a small screen. A message card makes it
+        taller by the card, downwards, so the text box stays where it was and keeps its room to
+        grow as I type. Only on a screen too short for that does it move up."""
+        self.setFixedWidth(min(SIZE.width(), area.width()))
+        for layout in self.layouts:  # laid out now, even while hidden, so the card has its width
+            layout.invalidate()  # or it isn't redone on a screen of another width
+            layout.activate()
+        card = 0 if self.inbox.isHidden() else self.inbox.heightForWidth(self.inbox.width()) + GAP
+        self.setFixedSize(QSize(SIZE.width(), SIZE.height() + card).boundedTo(area.size()))
+        top = area.center().y() - SIZE.height() // 2  # where it is with no card
+        bottom = area.y() + area.height() - self.height()  # the lowest it can go and still fit
+        self.move(area.center().x() - self.width() // 2, max(area.y(), min(top, bottom)))
 
     def _take_focus(self) -> None:
         self.focusing = True  # until Windows grants it, or the window hides
@@ -180,7 +199,14 @@ class Window(QWidget):
         parts.show_quick(self.quick, view.lists.quick)
         self.today.show_day(self.controller.day())
         self._say(view.problem or view.message, _tone(view))
+        self.show_inbox()
         self._preview()  # the lists may have changed under what's typed
+
+    def show_inbox(self) -> None:
+        """On each draw, and when the app sees a message come or go."""
+        self.inbox.show_inbox(self.controller.inbox, self.controller.words)
+        if self.isVisible():
+            self._fit(self.screen().availableGeometry())
 
     def show_error(self, message: str) -> None:
         """Called by the error hook. Redraws from what the controller holds (which is saved) and
