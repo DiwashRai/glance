@@ -7,26 +7,31 @@ with the full text in a tooltip.
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Callable
 
-from PySide6.QtCore import QCoreApplication, QPointF, Qt
+from PySide6.QtCore import QMimeData, QPointF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
     QInputMethodEvent,
+    QKeyEvent,
     QPainter,
     QPen,
     QPixmap,
     QResizeEvent,
     QTextCharFormat,
+    QTextCursor,
 )
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
+    QPlainTextEdit,
     QSizePolicy,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -324,12 +329,75 @@ def _marker(reason: LeftOff | Waiting) -> QPixmap:
 
 
 NOTE_WIDTH = 260
+MAX_LINES = 5  # then it scrolls
+# What Python counts as a line break, and a tab, which a pane may read as a key of its own
+LINE_BREAK = re.compile(r"\r\n|[\t\n\r\v\f\x1c-\x1e\x85\N{LINE SEPARATOR}\N{PARAGRAPH SEPARATOR}]")
+
+
+class Box(QPlainTextEdit):
+    """What I type: one line that wraps, and grows to MAX_LINES as it does. Enter sends it
+    (`sent`). A line break that comes in another way (a paste, an input method, dictation)
+    becomes a space as it comes in, as an agent's pane would read it as Enter. Tab does
+    nothing: there's nowhere else to go."""
+
+    sent = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setFont(font(16))
+        self.setPlaceholderText("what's going on?")
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.document().setDocumentMargin(0)
+        self.document().documentLayout().documentSizeChanged.connect(self._fit)
+        self.line = self.fontMetrics().lineSpacing()
+        self.setFixedHeight(self.line)
+
+    def text(self) -> str:
+        """One line, even if a break got in some way not caught below."""
+        return LINE_BREAK.sub(" ", self.toPlainText())
+
+    def insertFromMimeData(self, source: QMimeData) -> None:
+        """A paste or a drop."""
+        self.insertPlainText(LINE_BREAK.sub(" ", source.text()))
+
+    def inputMethodEvent(self, e: QInputMethodEvent) -> None:
+        """An input method or dictation, with the word it's still composing left as it is."""
+        flat = QInputMethodEvent(e.preeditString(), e.attributes())
+        commit = LINE_BREAK.sub(" ", e.commitString())
+        flat.setCommitString(commit, e.replacementStart(), e.replacementLength())
+        super().inputMethodEvent(flat)
+
+    def keyPressEvent(self, e: QKeyEvent) -> None:
+        match e.key():
+            case Qt.Key.Key_Return | Qt.Key.Key_Enter:
+                self.sent.emit()
+            case Qt.Key.Key_Tab | Qt.Key.Key_Backtab:
+                pass
+            case _:
+                super().keyPressEvent(e)
+
+    def resizeEvent(self, e: QResizeEvent) -> None:
+        """The note coming and going changes the width, and so how many lines it wraps to."""
+        super().resizeEvent(e)
+        self._fit()
+
+    def _fit(self) -> None:
+        """As tall as the lines it wraps to, up to MAX_LINES, measured where Qt laid them out,
+        with the cursor kept in sight. The extra pixel is for Qt, which counts a line ending
+        exactly on the bottom edge as cut off, and would keep the first line scrolled away."""
+        block = self.document().firstBlock()
+        tall = self.blockBoundingRect(block).height()  # lays the line out, if it isn't yet
+        lines = block.layout().lineCount()
+        self.setFixedHeight(math.ceil(tall * min(lines, MAX_LINES) / lines) + 1)
+        self.ensureCursorVisible()
 
 
 class Prompt(QFrame):
     """The text box, with board F's blue `›`. As I type, the words glance picked up are blue, and
     a note on the right says what else will happen. For an agent, the `›` and the note (its name)
-    turn yellow, or the note is red if it can't be sent to."""
+    turn yellow, or the note is red if it can't be sent to. The `›` and the note stay level with
+    the first line as the box grows."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -337,14 +405,12 @@ class Prompt(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 13, 20, 13)
         layout.setSpacing(14)
-        self.mark = label("›", "prompt-mark", 22)
-        layout.addWidget(self.mark)
-        self.input = QLineEdit()
-        self.input.setFont(font(20))
-        self.input.setPlaceholderText("what's going on?")
-        layout.addWidget(self.input, stretch=1)
+        self.input = Box()
+        self.mark = label("›", "prompt-mark", 18)
         self.note = label("", "dim", 13)
-        layout.addWidget(self.note)
+        for widget, stretch in ((self.mark, 0), (self.input, 1), (self.note, 0)):
+            widget.setMinimumHeight(self.input.line)  # the labels: centred on the first line
+            layout.addWidget(widget, stretch, Qt.AlignmentFlag.AlignTop)
 
     def show_preview(self, preview: Preview) -> None:
         """The note never takes more than NOTE_WIDTH, so what's typed keeps its room."""
@@ -357,23 +423,21 @@ class Prompt(QFrame):
         _colour(self.input, preview.marks)
 
 
-def _colour(box: QLineEdit, marks: tuple[tuple[int, int], ...]) -> None:
-    """Qt colours part of a line edit's text the way an input method does: formats placed
-    relative to the cursor, sent in an event that changes no text."""
+def _colour(box: Box, marks: tuple[tuple[int, int], ...]) -> None:
     text = box.text()
-    cursor = box.cursorPosition()
-    picked = QTextCharFormat()
-    picked.setForeground(QColor(theme.BLUE))
-    formats = [
-        QInputMethodEvent.Attribute(
-            QInputMethodEvent.AttributeType.TextFormat,
-            _utf16(text, start) - cursor,
-            _utf16(text, end) - _utf16(text, start),
-            picked,
-        )
-        for start, end in marks
-    ]
-    QCoreApplication.sendEvent(box, QInputMethodEvent("", formats))
+    box.setExtraSelections([_picked(box, _utf16(text, s), _utf16(text, e)) for s, e in marks])
+
+
+def _picked(box: Box, start: int, end: int) -> QTextEdit.ExtraSelection:
+    """The text from `start` to `end`, coloured blue."""
+    cursor = QTextCursor(box.document())
+    cursor.setPosition(start)
+    cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+    blue = QTextCharFormat()
+    blue.setForeground(QColor(theme.BLUE))
+    picked = QTextEdit.ExtraSelection()
+    picked.cursor, picked.format = cursor, blue  # set whole: Qt hands back copies
+    return picked
 
 
 def _utf16(text: str, index: int) -> int:
