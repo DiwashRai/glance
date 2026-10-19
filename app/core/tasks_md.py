@@ -43,6 +43,7 @@ from app.core.model import (
     NoPlan,
     ParkedTask,
     Plan,
+    Problem,
     Step,
     StepState,
     Task,
@@ -57,25 +58,10 @@ TODAY = "# Today"  # with its date: # Today 2026-10-18
 WAITING_ON = "waiting on:"
 LEFT_OFF = "left off:"
 HOME_QUICK = "home: quick"  # under the active task: it came from Quick, and goes back there
-NO_NOTES = {
-    "focus": "a focus can't have a note",
-    "quick": "a quick item can't have a note",
-    "today": "a block can't have a note",
-}
-NO_STEPS = {
-    "focus": "a focus can't have steps",
-    "quick": "a quick item can't have steps",
-    "today": "a block can't have steps",
-}
+PLAIN = {"focus": "a focus", "quick": "a quick item", "today": "a block"}  # no notes or steps
 STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
 MARKS: dict[str, StepState] = {" ": "open", "x": "done", "X": "done", ">": "skipped", "-": "left"}
 BOXES: dict[StepState, str] = {"open": " ", "done": "x", "skipped": ">", "left": "-"}
-
-
-@dataclass(frozen=True)
-class Problem:
-    line: int
-    message: str
 
 
 def render(lists: Lists) -> str:
@@ -247,8 +233,8 @@ class _Reader:
     def _note(self, text: str) -> str:
         if self.section == "active":
             return self._home(text)
-        if self.section in NO_NOTES:
-            return NO_NOTES[self.section]
+        if self.section in PLAIN:
+            return f"{PLAIN[self.section]} can't have a note"
         if not self.parked or self.noted:
             return "a note goes on its own line under a parked task, one per task"
         match _reason(text):
@@ -266,7 +252,7 @@ class _Reader:
                 self.active = FromQuick(task)
                 return ""
             case Task() if text.lower() == HOME_QUICK:
-                return NO_STEPS["quick"]
+                return _no_steps("quick")
             case FromQuick():
                 return f"a task from quick has only '{HOME_QUICK}' under it, once"
             case _:
@@ -287,12 +273,16 @@ class _Reader:
                     last, task=replace(last.task, steps=(*last.task.steps, step))
                 )
             case "active", FromQuick():
-                return NO_STEPS["quick"]
-            case section, _ if section in NO_STEPS:
-                return NO_STEPS[section]
+                return _no_steps("quick")
+            case section, _ if section in PLAIN:
+                return _no_steps(section)
             case _:
                 return "a step goes under a task"
         return ""
+
+
+def _no_steps(section: str) -> str:
+    return f"{PLAIN[section]} can't have steps"
 
 
 @dataclass(frozen=True)

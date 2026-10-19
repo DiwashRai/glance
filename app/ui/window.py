@@ -124,10 +124,14 @@ class Window(QWidget):
         self._take_focus()
 
     def _appear(self) -> None:
-        """Re-read the lists, then show it in the middle of the screen under the mouse, in front,
-        without taking the focus."""
+        """Re-read the lists, then show it on the screen under the mouse, without taking the
+        focus."""
         self.draw(self.controller.open())
-        area = (QGuiApplication.screenAt(QCursor.pos()) or self.screen()).availableGeometry()
+        under_mouse = QGuiApplication.screenAt(QCursor.pos()) or self.screen()
+        self._show_on(under_mouse.availableGeometry())
+
+    def _show_on(self, area: QRect) -> None:
+        """In the middle of `area`, in front, with the rest of it dimmed."""
         self.setFixedSize(SIZE.boundedTo(area.size()))  # never jumps; smaller on a small screen
         self.move(area.center() - self.rect().center())
         self.backdrop.cover(area)
@@ -184,9 +188,7 @@ class Window(QWidget):
         self.draw(View(self.controller.lists))
         self._say(f"error: {message}", "error")
         self.watch.stop()  # an error turns a peek into a window that stays
-        self.backdrop.cover(self.screen().availableGeometry())
-        self.show()
-        self.raise_()
+        self._show_on(self.screen().availableGeometry())
 
     def _say(self, text: str, tone: str) -> None:
         self.message.setText(text)

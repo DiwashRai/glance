@@ -5,8 +5,8 @@ import pytest
 
 from app.core.blocks import planned
 from app.core.commands import Applied, Ask, Preview, Rejected, apply, parse_command, preview
-from app.core.model import Block, CommandWords, Event, Lists, NoPlan, Plan, Task
-from app.core.tasks_md import Problem, parse, render
+from app.core.model import Block, CommandWords, Event, Lists, NoPlan, Plan, Problem, Task
+from app.core.tasks_md import parse, render
 
 NOW = datetime(2026, 10, 18, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
 TODAY = NOW.date()

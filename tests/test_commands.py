@@ -19,7 +19,6 @@ from app.core.commands import (
     Switch,
     Typed,
     Unfocus,
-    Wait,
     apply,
     parse_command,
 )
@@ -67,9 +66,9 @@ def applied(lists: Lists, text: str) -> Applied:
     ("text", "command"),
     [
         ("new fix the build", New("fix the build")),
-        ("PAUSE retry loop", Park("retry loop")),
-        ("shelve", Park("")),
-        ("wait CI run", Wait("CI run")),
+        ("PAUSE retry loop", Park(LeftOff("retry loop"))),
+        ("shelve", Park(LeftOff())),
+        ("wait CI run", Park(Waiting("CI run"))),
         ("s 1129", Switch("1129")),
         ("d", Done()),
         ("done 1129", Done("1129")),
@@ -100,7 +99,7 @@ def test_line_breaks_become_one_space_so_tasks_md_reads_back(text: str) -> None:
 
 def test_words_come_from_settings() -> None:
     words = CommandWords(park=("later",))
-    assert parse_command("later notes", words) == Park("notes")
+    assert parse_command("later notes", words) == Park(LeftOff("notes"))
     assert parse_command("park notes", words) == Typed("park notes")
     # with one agent, any number of spaces is for it
     assert parse_command("  x", CommandWords(agents=("me",))) == Ask("me", "x")

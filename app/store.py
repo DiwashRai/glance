@@ -13,8 +13,7 @@ from pathlib import Path
 
 from app.core import events_log, tasks_md
 from app.core.events_log import History
-from app.core.model import Event, Lists
-from app.core.tasks_md import Problem
+from app.core.model import Event, Lists, Problem
 
 TASKS_FILE = "tasks.md"
 EVENTS_FILE = "events.log"
@@ -73,7 +72,6 @@ class Store:
 
     def save(self, lists: Lists) -> Stamp:
         """Write tasks.md atomically: a temp file next to it, flushed to disk, then swapped in."""
-        self.folder.mkdir(parents=True, exist_ok=True)
         temp = self.folder / f"{TASKS_FILE}.tmp"
         with temp.open("w", encoding="utf-8", newline="\n") as file:
             file.write(tasks_md.render(lists))
@@ -86,7 +84,6 @@ class Store:
     def append(self, events: Sequence[Event]) -> None:
         if not events:
             return
-        self.folder.mkdir(parents=True, exist_ok=True)
         with self.events_path.open("a", encoding="utf-8", newline="\n") as file:
             file.writelines(f"{events_log.line(event)}\n" for event in events)
 

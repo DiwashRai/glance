@@ -217,6 +217,14 @@ class Event:
 
 
 @dataclass(frozen=True)
+class Problem:
+    """Why tasks.md or events.log can't be read: the line, and what's wrong with it."""
+
+    line: int
+    message: str
+
+
+@dataclass(frozen=True)
 class HudSettings:
     """How the HUD on the taskbar looks."""
 
