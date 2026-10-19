@@ -36,7 +36,7 @@ HUD_TEXT_LIGHT = "#1b1b1d"  # text on a light taskbar
 # Each count is a chip tinted in its source's colour, by the icon it names; others are blue
 HUD_SOURCES = {"todo": "#e8604c", "mail": "#4c9aff", "jira": "#36b3d9", "pr": "#a47cf3"}
 HUD_TINT = {False: 55, True: 60}  # how strong the tint is, out of 255, on a dark or light bar
-HUD_HIGH = "#d97706"  # a chip at level 2 is solid amber
+HUD_HIGH = "#b45309"  # a chip at level 2 is solid amber, dark enough for white on it
 HUD_ALERT = "#dc2626"  # and at level 3, or for a failed provider, solid red
 HUD_BOX = f"background: {CARD}; border: 1px solid {BORDER}; border-radius: 8px;"
 

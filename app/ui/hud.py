@@ -1,5 +1,6 @@
 """The HUD: one row on the taskbar, just left of the tray. The active task (optional), then each
-count from the collector, as its icon or its label plus a number coloured by level.
+count from the collector as a chip: its icon or label and its number, coloured by its source and
+its level.
 
 Every 2 seconds it hides while a full-screen app is in front, otherwise finds the tray, sits next
 to it and lifts itself back above the taskbar. It only redraws when what it shows has changed.
@@ -122,13 +123,13 @@ class Hud(QWidget):
         else:
             self.items = [_count(count, self.settings, style) for count in shown.counts]
         for item in self.items:
-            self.row.addWidget(item)
+            self.row.addWidget(item, alignment=Qt.AlignmentFlag.AlignVCenter)  # its own height
             item.show()  # now, so its width counts when the HUD is measured and placed
         used = sum(item.sizeHint().width() + self.row.spacing() for item in self.items)
         room = min(ACTIVE_WIDTH, shown.room - used)
         if active and room >= MIN_ACTIVE_WIDTH:
             self.items.insert(0, _active(active, style, room))
-            self.row.insertWidget(0, self.items[0])
+            self.row.insertWidget(0, self.items[0], alignment=Qt.AlignmentFlag.AlignVCenter)
             self.items[0].show()
 
     def _place(self, tray: Tray, scale: float) -> None:
@@ -195,7 +196,7 @@ def _count(count: Count, settings: HudSettings, style: _Style) -> QWidget:
         source.setAlpha(theme.HUD_TINT[style.light])
         fill = source.name(QColor.NameFormat.HexArgb)
         source.setAlpha(255)
-        ink = (source.darker(140) if style.light else source.lighter(125)).name()
+        ink = (source.darker(180) if style.light else source.lighter(125)).name()  # 5:1 or more
     chip = QFrame()
     chip.setObjectName("chip")  # so the style is the chip's, not its contents'
     chip.setStyleSheet(f"QFrame#chip {{ background: {fill}; border-radius: 8px; }}")
