@@ -161,6 +161,18 @@ class ParkedTask:
     reason: LeftOff | Waiting
 
 
+def parked_note(parked: ParkedTask) -> str:
+    """The line under a parked task: what it's waiting on, where I left off, or else where it's
+    up to in its steps. "" when there's none."""
+    match parked.reason:
+        case Waiting(on=on):
+            return f"waiting on {on}"
+        case LeftOff(note=""):
+            return step_line(parked.task)
+        case LeftOff(note=note):
+            return f"left off: {note}"
+
+
 @dataclass(frozen=True)
 class Block:
     """Time set aside on the plan's day: `14:00-15:30 deep work`. It ends by midnight."""

@@ -46,6 +46,7 @@ from app.core.model import (
     ParkedTask,
     Task,
     Waiting,
+    parked_note,
     shown,
     size_text,
     step_line,
@@ -292,23 +293,13 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
     top.addWidget(label(str(number), "number", 12))
     top.addWidget(title, stretch=1)
     layout.addLayout(top)
-    note = _note(parked.reason) or step_line(parked.task)
+    note = parked_note(parked)
     if note:
         sub = Elided("dim", 12)
         sub.setContentsMargins(36, 0, 0, 0)
         sub.show_text(note)
         layout.addWidget(sub)
     return row
-
-
-def _note(reason: LeftOff | Waiting) -> str:
-    match reason:
-        case Waiting(on=on):
-            return f"waiting on {on}"
-        case LeftOff(note=""):
-            return ""
-        case LeftOff(note=note):
-            return f"left off: {note}"
 
 
 def _marker(reason: LeftOff | Waiting) -> QPixmap:
