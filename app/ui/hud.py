@@ -1,7 +1,8 @@
 """The HUD: one row on every taskbar, just left of the tray on the main one and of the clock on
 the others. Each count from the collector is a chip: its icon or label and its number, coloured
 by its source and its level. The main taskbar's row starts with the active task (optional): the
-others are narrower, and the app buttons come close.
+others are narrower, and the app buttons come close. While messages for me are waiting, a yellow
+chip goes before the counts: who the top one's from, and how many more.
 
 Every 2 seconds, and when a monitor comes or goes, it finds the taskbars showing, sits on each
 and lifts itself back above them. One hides with its taskbar (a full-screen video or game on
@@ -12,14 +13,14 @@ them opens the overlay.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QMouseEvent, QScreen
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
-from app.core.model import HudSettings, Idle, Lists, Task, step_line, working
+from app.core.model import HudSettings, Idle, Lists, Message, Task, step_line, working
 from app.counts import Count, CountsFile
 from app.ui import icons, theme
 from app.win32.taskbar import Tray, find_taskbars, lift, light_taskbar
@@ -39,7 +40,8 @@ class Shown:
     active: str
     counts: tuple[Count, ...]
     light: bool
-    room: int  # the most the HUD may take, in Qt pixels
+    inbox: tuple[Message, ...] = ()
+    room: int = 0  # the most the HUD may take, in Qt pixels
 
 
 class Hud:
@@ -50,11 +52,13 @@ class Hud:
         self,
         settings: HudSettings,
         lists: Callable[[], Lists],
+        inbox: Callable[[], tuple[Message, ...]],
         counts_file: Path,
         clicked: Callable[[], None],
     ) -> None:
         self.settings = settings
         self.lists = lists
+        self.inbox = inbox
         self.counts = CountsFile(counts_file)
         self.clicked = clicked
         self.bars: list[_Bar] = []
@@ -76,9 +80,9 @@ class Hud:
             bar.hide()
         if showing:
             active = _active_title(working(self.lists().active))
-            counts, light = self.counts.read(), light_taskbar()
+            shown = Shown("", self.counts.read(), light_taskbar(), self.inbox())
             for bar, tray in showing:
-                bar.show_on(tray, active if tray.main else "", counts, light)
+                bar.show_on(tray, replace(shown, active=active) if tray.main else shown)
 
 
 class _Bar(QWidget):
@@ -88,7 +92,7 @@ class _Bar(QWidget):
         super().__init__()
         self.settings = settings
         self.clicked = clicked
-        self.shown = Shown("", (), light=False, room=0)
+        self.shown = Shown("", (), light=False)
         self.setWindowTitle("glance HUD")
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -109,10 +113,9 @@ class _Bar(QWidget):
         outer.addWidget(self.frame)
         self.items: list[QWidget] = []
 
-    def show_on(self, tray: Tray, active: str, counts: tuple[Count, ...], light: bool) -> None:
+    def show_on(self, tray: Tray, shown: Shown) -> None:
         screen = _screen(tray)
-        room = int(tray.width / screen.devicePixelRatio() * MAX_SHARE)
-        shown = Shown(active, counts, light, room)
+        shown = replace(shown, room=int(tray.width / screen.devicePixelRatio() * MAX_SHARE))
         if shown != self.shown:
             self.shown = shown
             self._draw(shown)
@@ -126,7 +129,7 @@ class _Bar(QWidget):
             self.clicked()
 
     def _draw(self, shown: Shown) -> None:
-        """The counts go in first. The active task then goes in front of them, shortened to the
+        """The chips go in first. The active task then goes in front of them, shortened to the
         room they leave, or left out if there's too little."""
         for item in self.items:
             self.row.removeWidget(item)
@@ -135,10 +138,7 @@ class _Bar(QWidget):
         style = _Style.of(self.settings, light=shown.light)
         self.frame.setStyleSheet(f"QFrame#hud {{ {style.frame} }}")
         active = shown.active if self.settings.show_active else ""
-        if not active and all(count.value == 0 for count in shown.counts):
-            self.items = [_all_clear()]  # never an empty box: glance is here, and all is calm
-        else:
-            self.items = [_count(count, self.settings, style) for count in shown.counts]
+        self.items = _chips(shown, self.settings, style, calm=not active)
         for item in self.items:
             self.row.addWidget(item, alignment=Qt.AlignmentFlag.AlignVCenter)  # its own height
             item.show()  # now, so its width counts when the HUD is measured and placed
@@ -205,6 +205,25 @@ def _active(title: str, style: _Style, room: int) -> QWidget:
     return _beside(_text("●", theme.ORANGE, 11), name)
 
 
+def _chips(shown: Shown, settings: HudSettings, style: _Style, *, calm: bool) -> list[QWidget]:
+    """Messages waiting for me, then the counts. Never an empty box: with nothing active, no
+    messages and every count zero, a tick says glance is here, and all is calm."""
+    if calm and not shown.inbox and all(count.value == 0 for count in shown.counts):
+        return [_all_clear()]
+    waiting = [_waiting(shown.inbox, style)] if shown.inbox else []
+    return [*waiting, *(_count(count, settings, style) for count in shown.counts)]
+
+
+def _waiting(inbox: tuple[Message, ...], style: _Style) -> QWidget:
+    """A chip tinted yellow: a dot, who the top message is from, and +2 for two more."""
+    fill, ink = _tinted(theme.YELLOW, light=style.light, darker=240)  # yellow is light: deeper
+    sender, count = inbox[0].sender, len(inbox)
+    more = [_text(f"+{count - 1}", ink, 13, QFont.Weight.Bold)] if count > 1 else []
+    dot = _text("●", ink, 13, QFont.Weight.Bold)
+    tip = f"{count} waiting · open glance to read"
+    return _chip(fill, tip, dot, _text(sender, ink, 13), *more)
+
+
 def _all_clear() -> QWidget:
     """A green tick, like v1's "all clear", when nothing is active and every count is zero."""
     tick = _text("✓", theme.GREEN, 20, QFont.Weight.Bold)
@@ -218,23 +237,34 @@ def _count(count: Count, settings: HudSettings, style: _Style) -> QWidget:
     A count of -1 means its provider failed: a red "!"."""
     failed = count.value < 0
     level = 3 if failed else count.level
-    source = QColor(theme.HUD_SOURCES.get(count.icon, theme.BLUE))
     if level >= 2:
         fill, ink = (theme.HUD_HIGH if level == 2 else theme.HUD_ALERT), theme.BRIGHT
     else:
-        source.setAlpha(theme.HUD_TINT[style.light])
-        fill = source.name(QColor.NameFormat.HexArgb)
-        source.setAlpha(255)
-        ink = (source.darker(180) if style.light else source.lighter(125)).name()  # 5:1 or more
+        fill, ink = _tinted(theme.HUD_SOURCES.get(count.icon, theme.BLUE), light=style.light)
+    number = _text("!" if failed else str(count.value), ink, 13, QFont.Weight.Bold)
+    tip = f"{count.label}: {'failed' if failed else count.value}"
+    return _chip(fill, tip, _symbol(count, settings, ink), number)
+
+
+def _tinted(colour: str, *, light: bool, darker: int = 180) -> tuple[str, str]:
+    """A calm chip's fill, its colour see-through, and its ink: 5:1 or more on either taskbar."""
+    source = QColor(colour)
+    source.setAlpha(theme.HUD_TINT[light])
+    fill = source.name(QColor.NameFormat.HexArgb)
+    source.setAlpha(255)
+    return fill, (source.darker(darker) if light else source.lighter(125)).name()
+
+
+def _chip(fill: str, tip: str, *inside: QWidget) -> QFrame:
     chip = QFrame()
     chip.setObjectName("chip")  # so the style is the chip's, not its contents'
     chip.setStyleSheet(f"QFrame#chip {{ background: {fill}; border-radius: 8px; }}")
-    chip.setToolTip(f"{count.label}: {'failed' if failed else count.value}")
-    inside = QHBoxLayout(chip)
-    inside.setContentsMargins(7, 3, 9, 3)
-    inside.setSpacing(5)
-    inside.addWidget(_symbol(count, settings, ink))
-    inside.addWidget(_text("!" if failed else str(count.value), ink, 13, QFont.Weight.Bold))
+    chip.setToolTip(tip)
+    row = QHBoxLayout(chip)
+    row.setContentsMargins(7, 3, 9, 3)
+    row.setSpacing(5)
+    for widget in inside:
+        row.addWidget(widget)
     return chip
 
 

@@ -1,5 +1,5 @@
 """The overlay's pieces, as board F draws them: the Active card, the Focus, Parked and Quick
-cards, the prompt with its `›`, and the key hints.
+cards, the prompt with its `›`, the key hints, and the card for a message for me.
 
 Task text is always shown as plain text, never as HTML, and a line that doesn't fit ends in "…"
 with the full text in a tooltip.
@@ -36,13 +36,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.commands import Preview
+from app.core.commands import Preview, spaces_for
 from app.core.model import (
     FOCUS_SLOTS,
     CommandWords,
     FromQuick,
     Idle,
     LeftOff,
+    Message,
     ParkedTask,
     Task,
     Waiting,
@@ -444,6 +445,59 @@ def message_line() -> QLabel:
     widget.setFixedHeight(widget.fontMetrics().lineSpacing() * 2 + 4)
     widget.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
     return widget
+
+
+class InboxCard(QFrame):
+    """The oldest message for me, edged in yellow, under the prompt: who it's from, when, how
+    many are waiting, then the keys that clear it or answer it. As tall as its text wraps to at
+    the width it's given. Hidden while there are none."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        styled(self, "inbox")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 14, 20, 14)
+        layout.setSpacing(8)
+        self.who = header("", "inbox-header")
+        self.at = label("", "number", 12)
+        self.count = label("", "dim", 11)
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        top.addWidget(self.who)
+        top.addWidget(self.at)
+        top.addStretch()
+        top.addWidget(self.count)
+        self.text = label("", "title", 14)
+        self.text.setWordWrap(True)
+        self.spaces = label("", "kbd", 11)  # ␣␣ for chief, ␣ for assistant
+        self.reply = label("reply", "dim", 12)
+        keys = QHBoxLayout()
+        keys.setSpacing(6)
+        for widget in (label("↵", "kbd", 11), label("clear", "dim", 12)):
+            keys.addWidget(widget)
+        keys.addSpacing(10)
+        keys.addWidget(self.spaces)
+        keys.addWidget(self.reply)
+        keys.addStretch()
+        layout.addLayout(top)
+        layout.addWidget(self.text)
+        layout.addLayout(keys)
+        self.hide()
+
+    def show_inbox(self, inbox: tuple[Message, ...], words: CommandWords) -> None:
+        """Answering is offered only to a sender that lines can go to."""
+        self.setVisible(bool(inbox))
+        if not inbox:
+            return
+        top = inbox[0]
+        self.who.setText(f"● from {top.sender}".upper())
+        self.at.setText(top.at)
+        self.count.setText(f"1 of {len(inbox)}" if len(inbox) > 1 else "")
+        self.text.setText(top.text)
+        spaces = spaces_for(top.sender, words)
+        self.spaces.setText("␣" * spaces)
+        self.spaces.setVisible(bool(spaces))
+        self.reply.setVisible(bool(spaces))
 
 
 def hints(words: CommandWords) -> QWidget:

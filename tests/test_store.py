@@ -54,6 +54,22 @@ def test_an_unreadable_file_is_refused_and_left_alone(tmp_path: Path) -> None:
     assert store.tasks_path.read_text(encoding="utf-8") == "# Active\n- a\n- b\n"
 
 
+def test_messages_wait_oldest_first_and_once_all_are_cleared_nothing_is_left(
+    tmp_path: Path,
+) -> None:
+    store = Store(tmp_path)
+    store.tell("chief", "release notes are ready", AT)
+    store.tell("assistant", "Sam's birthday", AT + timedelta(minutes=3))
+    first, second = store.inbox()
+    assert (first.sender, first.at, first.text) == ("chief", "09:58", "release notes are ready")
+    assert (second.sender, second.at) == ("assistant", "10:01")
+    for message in (first, second):
+        store.clear(message)
+    assert store.inbox() == ()
+    assert list(tmp_path.iterdir()) == [store.inbox_path]  # no temp files either
+    assert not any(store.inbox_path.iterdir())
+
+
 def test_events_are_appended_as_aligned_lines_and_read_back(tmp_path: Path) -> None:
     store = Store(tmp_path)
     assert store.history() == History()
