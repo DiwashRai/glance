@@ -81,7 +81,7 @@ requests = [
 # [[entries]]
 # provider = "todoist"
 # label = "todoist/today"
-# icon = ""
+# icon = "todo"
 # thresholds = { low = 5, medium = 15, high = 30 }
 # requests = [
 #   { filter = "today | overdue" }
@@ -90,7 +90,7 @@ requests = [
 # [[entries]]
 # provider = "work_outlook"
 # label = "email/inbox"
-# icon = "󰇮"
+# icon = "mail"
 # thresholds = { low = 5, medium = 15, high = 30 }
 # requests = [
 #   { folders = ["6"] }
@@ -99,7 +99,7 @@ requests = [
 # [[entries]]
 # provider = "work_jira"
 # label = "jira"
-# icon = ""
+# icon = "jira"
 # thresholds = { low = 1, medium = 3, high = 5 }
 # requests = [
 #   { jql = ["assignee = currentUser() AND Status != Closed"] }
@@ -108,7 +108,7 @@ requests = [
 # [[entries]]
 # provider = "github"
 # label = "reviews"
-# icon = ""
+# icon = "pr"
 # thresholds = { low = 1, medium = 3, high = 5 }
 # requests = [
 #   { args = ["--state=open", "--assignee=@me"] },

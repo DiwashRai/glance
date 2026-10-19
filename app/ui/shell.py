@@ -26,6 +26,8 @@ class Shell:
         self.tray.activated.connect(self._tray_clicked)
         app.installNativeEventFilter(self.hotkey)
         app.aboutToQuit.connect(self.hotkey.unregister)
+        app.screenAdded.connect(self.hud.tick)  # a monitor comes or goes: a bar for each taskbar
+        app.screenRemoved.connect(self.hud.tick)
         app.setQuitOnLastWindowClosed(False)  # it lives in the tray; Ctrl+Space opens it
 
     def start(self) -> None:
