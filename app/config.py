@@ -75,15 +75,15 @@ class _Glance(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     hud: _Hud = msgspec.field(default_factory=_Hud)
 
 
-class _Updater(msgspec.Struct, frozen=True):
-    """The collector's table: glance only reads where it writes the counts."""
+class Updater(msgspec.Struct, frozen=True):
+    """The collector's table: where it writes the counts, relative to the config file."""
 
     output_path: str = "data/status.local.json"
 
 
 class _File(msgspec.Struct, frozen=True):
     glance: _Glance = msgspec.field(default_factory=_Glance)
-    updater: _Updater = msgspec.field(default_factory=_Updater)
+    updater: Updater = msgspec.field(default_factory=Updater)
 
 
 @dataclass(frozen=True)

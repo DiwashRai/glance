@@ -1,142 +1,58 @@
-import json
+"""Unread mail in Outlook, from get_outlook_unread.ps1. Each request lists folders: a name (from
+the store), or a number for one of Outlook's default folders (6 is the Inbox)."""
+
+import functools
 from collections.abc import Sequence
 from pathlib import Path
-from typing import ClassVar, cast
+from typing import Annotated
 
-from app.providers.registry import provider_registry
-from app.types import ProviderContext, TomlTable
+import msgspec
+
+from app.types import NonEmpty, Table
 from app.utils import run_no_window
 
-_UNREAD_COUNT_CACHE: dict[str, dict[str, int]] = {}
-_DEFAULT_OUTLOOK_STORE = "__unused__"
 _SCRIPT_PATH = Path(__file__).with_name("get_outlook_unread.ps1")
+Unread = Annotated[int, msgspec.Meta(ge=0)]
 
 
-def _get_unread_count_bucket(cache_data: dict[str, object], bucket_name: str) -> dict[str, int]:
-    value = cache_data.get(bucket_name)
-    if not isinstance(value, dict):
-        raise RuntimeError(
-            f"get_outlook_unread.ps1 returned invalid '{bucket_name}' data: expected a dict"
-        )
-
-    raw_counts = cast(dict[object, object], value)
-    unread_counts: dict[str, int] = {}
-    for key, count in raw_counts.items():
-        if not isinstance(key, str) or not isinstance(count, int):
-            raise RuntimeError(
-                f"get_outlook_unread.ps1 returned invalid '{bucket_name}' data: "
-                "expected string keys and integer counts"
-            )
-        unread_counts[key] = count
-    return unread_counts
+class _Config(msgspec.Struct):
+    outlook_store: NonEmpty  # its email address
 
 
-def _load_unread_count_cache(outlook_store: str, default_folder_ids: list[int]) -> None:
-    if not _SCRIPT_PATH.exists():
-        raise RuntimeError(f"Could not find Outlook unread script: {_SCRIPT_PATH}")
+class _Request(msgspec.Struct):
+    folders: Annotated[tuple[NonEmpty, ...], msgspec.Meta(min_length=1)]
 
-    command = [
-        "powershell",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(_SCRIPT_PATH),
-        "-Store",
-        outlook_store,
-    ]
-    if default_folder_ids:
-        command.extend(
-            ["-DefaultFolderIds", ",".join(str(folder) for folder in default_folder_ids)]
-        )
 
+class _Failed(msgspec.Struct):
+    error: str = ""  # the script's only key when it fails
+
+
+def count(provider: Table, requests: Sequence[Table]) -> int:
+    store = msgspec.convert(provider, _Config).outlook_store.lower()
+    folders = [name for request in requests for name in msgspec.convert(request, _Request).folders]
+    numbered = {name: str(int(name)) for name in folders if name.isdigit()}  # "06" is 6
+    counts = unread(store, tuple(sorted(set(numbered.values()))))
+    return sum(
+        counts["default"][numbered[name]] if name in numbered else counts[store][name.lower()]
+        for name in folders
+    )
+
+
+@functools.cache
+def unread(store: str, numbered: tuple[str, ...]) -> dict[str, dict[str, Unread]]:
+    """Unread counts by folder: the store's under its address, the numbered ones under "default".
+    The script runs once a run for each store and set of numbers, however many entries ask."""
+    command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"]
+    command += ["-File", str(_SCRIPT_PATH), "-Store", store]
+    command += ["-DefaultFolderIds", ",".join(numbered)] if numbered else []
     completed = run_no_window(command)
     if completed.returncode != 0:
         message = completed.stderr.strip() or completed.stdout.strip()
         raise RuntimeError(
             f"get_outlook_unread.ps1 failed with exit code {completed.returncode}: {message}"
         )
-
-    try:
-        cache_data = cast(object, json.loads(completed.stdout))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("get_outlook_unread.ps1 returned invalid JSON") from exc
-
-    if not isinstance(cache_data, dict):
-        raise RuntimeError("get_outlook_unread.ps1 returned unexpected data")
-    cache_data = cast(dict[str, object], cache_data)
-
-    error = cache_data.get("error")
-    if isinstance(error, str) and error:
-        raise RuntimeError(error)
-
-    if default_folder_ids:
-        default_counts = _get_unread_count_bucket(cache_data, "default")
-        _UNREAD_COUNT_CACHE["default"] = default_counts
-
-    store_counts = _get_unread_count_bucket(cache_data, outlook_store)
-    _UNREAD_COUNT_CACHE.setdefault(outlook_store, store_counts)
-
-
-def get_unread_email_count(
-    folders: Sequence[str | int], outlook_store: str = _DEFAULT_OUTLOOK_STORE
-) -> int:
-    if not isinstance(folders, list):
-        raise TypeError("folders must be provided as a list")
-    if outlook_store == "":
-        raise ValueError("outlook_store must not be empty")
-    outlook_store = outlook_store.lower()
-    if outlook_store not in _UNREAD_COUNT_CACHE:
-        _load_unread_count_cache(
-            outlook_store,
-            [folder for folder in folders if isinstance(folder, int)],
-        )
-
-    total = 0
-    for folder in folders:
-        if isinstance(folder, int):
-            total += _UNREAD_COUNT_CACHE["default"][str(folder)]
-            continue
-        total += _UNREAD_COUNT_CACHE[outlook_store][folder.lower()]
-
-    return total
-
-
-def _request_folders(request: TomlTable) -> list[int | str]:
-    folders = request.get("folders")
-    if not isinstance(folders, list) or not folders:
-        raise ValueError("Outlook requests require a non-empty 'folders' list")
-
-    folder_list: list[int | str] = []
-    for folder in folders:
-        if not isinstance(folder, str) or not folder:
-            raise ValueError("Outlook folder list items must be non-empty strings")
-        folder_list.append(int(folder) if folder.isdigit() else folder)
-    return folder_list
-
-
-def _parse_outlook_input(ctx: ProviderContext) -> tuple[list[int | str], str]:
-    outlook_store = ctx.provider_config.get("outlook_store")
-    if not isinstance(outlook_store, str) or not outlook_store:
-        raise ValueError(
-            f"[providers.{ctx.provider_name}].outlook_store must be "
-            "a non-empty string when provided"
-        )
-    outlook_store = outlook_store.lower()
-
-    folder_list = [folder for request in ctx.requests for folder in _request_folders(request)]
-    if not folder_list:
-        raise ValueError("Outlook requests require at least one folder in 'folders'")
-
-    return folder_list, outlook_store
-
-
-class OutlookProvider:
-    kind: ClassVar[str] = "outlook"
-
-    def count(self, ctx: ProviderContext) -> int:
-        folder_list, outlook_store = _parse_outlook_input(ctx)
-        return get_unread_email_count(folder_list, outlook_store=outlook_store)
-
-
-provider_registry.register(OutlookProvider)
+    failed = msgspec.json.decode(completed.stdout, type=_Failed).error
+    if failed:
+        raise RuntimeError(failed)
+    # the script gives -1 for a folder it can't open: refused here, so only this entry fails
+    return msgspec.json.decode(completed.stdout, type=dict[str, dict[str, Unread]])

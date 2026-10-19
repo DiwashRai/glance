@@ -1,32 +1,10 @@
+"""What the collector and its providers share."""
+
 from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import ClassVar, Protocol, TypeAlias, TypedDict
+from typing import Annotated, TypeAlias
 
-# ---- TOML Types ----------------------------------------------------------------------------
+import msgspec
 
-TomlValue: TypeAlias = str | int | float | bool | list["TomlValue"] | dict[str, "TomlValue"]
-TomlTable: TypeAlias = Mapping[str, TomlValue]
-
-# ---- Provider Types ------------------------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class ProviderContext:
-    provider_name: str
-    provider_config: TomlTable
-    requests: list[TomlTable]
-
-
-class Provider(Protocol):
-    kind: ClassVar[str]
-
-    def count(self, ctx: ProviderContext) -> int: ...
-
-
-# ---- Status Payload Types ------------------------------------------------------------------
-
-CountsRow: TypeAlias = tuple[str, str, int, int]
-
-
-class StatusFile(TypedDict):
-    f: list[CountsRow]
+NonEmpty = Annotated[str, msgspec.Meta(min_length=1)]
+Table: TypeAlias = Mapping[str, object]  # a TOML table, before the provider it's for checks it
+CountsRow: TypeAlias = tuple[str, str, int, int]  # label, icon, count, level

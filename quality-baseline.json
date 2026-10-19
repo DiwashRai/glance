@@ -36,12 +36,12 @@
     },
     "handlers": {
       "is_none": 0,
-      "optional_sig": 2,
-      "isinstance": 16,
+      "optional_sig": 0,
+      "isinstance": 0,
       "try": 1,
       "try_allowed": 0,
       "broad_except": 1,
-      "suppressions": 2
+      "suppressions": 0
     },
     "ui": {
       "is_none": 0,
@@ -62,10 +62,10 @@
       "suppressions": 0
     },
     "boundary": {
-      "is_none": 5,
+      "is_none": 0,
       "optional_sig": 0,
-      "isinstance": 36,
-      "try": 3,
+      "isinstance": 0,
+      "try": 1,
       "try_allowed": 0,
       "broad_except": 0,
       "suppressions": 0

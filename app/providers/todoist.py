@@ -1,14 +1,16 @@
-import json
+"""Todoist tasks: each request is a filter (`today | overdue`), and a task found by more than one
+counts once."""
+
 import logging
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Sequence
-from typing import ClassVar, TypeAlias, TypedDict, cast
 
-from app.providers.registry import provider_registry
-from app.types import ProviderContext
+import msgspec
+
+from app.types import NonEmpty, Table
 
 TODOIST_FILTER_URL = "https://api.todoist.com/api/v1/tasks/filter"
 DEFAULT_PAGE_SIZE = 200
@@ -17,49 +19,45 @@ MAX_RETRIES = 5
 logger = logging.getLogger(__name__)
 
 
-class TodoistTask(TypedDict):
+class _Config(msgspec.Struct):
+    api_token: NonEmpty
+
+
+class _Request(msgspec.Struct):
+    filter: str = ""
+    query: str = ""  # an older name for `filter`
+    lang: str = ""  # the filter's language, when it isn't English
+
+
+class _Task(msgspec.Struct):
     id: str
-    priority: int
-    content: str
-    description: str
 
 
-TodoistTasksResponse: TypeAlias = list[TodoistTask]
+class _Page(msgspec.Struct):
+    results: tuple[_Task, ...]
+    next_cursor: str | None = None  # none on the last page
 
 
-def parse_todoist_task(task: object) -> TodoistTask:
-    if not isinstance(task, dict):
-        raise TypeError("Task must be a JSON object")
-    task = cast(dict[str, object], task)
-
-    task_id = task.get("id")
-    priority = task.get("priority")
-    content = task.get("content")
-    description = task.get("description", "")
-
-    if not isinstance(task_id, str):
-        raise TypeError("Task id must be a string")
-    if not isinstance(priority, int):
-        raise TypeError("Task priority must be an int")
-    if not isinstance(content, str):
-        raise TypeError("Task content must be a string")
-    if not isinstance(description, str):
-        raise TypeError("Task description must be a string")
-
-    return TodoistTask(
-        id=task_id,
-        priority=priority,
-        content=content,
-        description=description,
-    )
+def count(provider: Table, requests: Sequence[Table]) -> int:
+    token = msgspec.convert(provider, _Config).api_token
+    asked = [msgspec.convert(request, _Request) for request in requests]
+    if not all(request.filter or request.query for request in asked):
+        raise ValueError("a Todoist request needs a filter")
+    return len({task for request in asked for task in _task_ids(token, request)})
 
 
-def parse_todoist_tasks(payload: dict[str, object]) -> list[TodoistTask]:
-    results = payload.get("results")
-    if not isinstance(results, list):
-        raise TypeError("Expected results array in todoist response")
-    results = cast(list[object], results)
-    return [parse_todoist_task(item) for item in results]
+def _task_ids(token: str, request: _Request) -> set[str]:
+    query = request.filter or request.query
+    found: set[str] = set()
+    cursor = ""
+    for _ in range(MAX_PAGES):
+        answer = _load_page(_page_request(token, query, request.lang, cursor))
+        page = msgspec.json.decode(answer, type=_Page)
+        found.update(task.id for task in page.results)
+        if not page.next_cursor:
+            break
+        cursor = page.next_cursor
+    return found
 
 
 def _page_request(
@@ -97,84 +95,11 @@ def _retry_or_raise(exc: urllib.error.HTTPError, attempt: int) -> None:
     ) from exc
 
 
-def _load_page(request: urllib.request.Request) -> object:
+def _load_page(request: urllib.request.Request) -> bytes:
     for attempt in range(MAX_RETRIES + 1):
         try:
             with urllib.request.urlopen(request) as response:
-                payload = cast(object, json.load(response))
+                return response.read()
         except urllib.error.HTTPError as exc:
             _retry_or_raise(exc, attempt)
-        else:
-            return payload
     raise RuntimeError("Todoist request failed after retries")
-
-
-def fetch_todoist_tasks(api_token: str, filter_value: str, lang: str = "") -> list[TodoistTask]:
-    if not api_token:
-        raise ValueError("api_token must be a non-empty string")
-    if not filter_value:
-        raise ValueError("filter_value must be a non-empty string")
-
-    task_list: list[TodoistTask] = []
-    cursor = ""
-
-    for _ in range(MAX_PAGES):
-        payload = _load_page(_page_request(api_token, filter_value, lang, cursor))
-        if not isinstance(payload, dict):
-            raise RuntimeError("Todoist response must be a JSON object")
-        payload = cast(dict[str, object], payload)
-
-        task_list.extend(parse_todoist_tasks(payload))
-
-        next_cursor = payload.get("next_cursor")
-        if next_cursor is None:
-            break
-        if not isinstance(next_cursor, str) or not next_cursor:
-            raise RuntimeError("Todoist response contained an invalid next_cursor value")
-        cursor = next_cursor
-
-    return task_list
-
-
-def get_task_count(api_token: str, filter_values: Sequence[str], lang: str = "") -> int:
-    task_ids: set[str] = set()
-    for filter_value in filter_values:
-        for task in fetch_todoist_tasks(api_token, filter_value=filter_value, lang=lang):
-            task_ids.add(task["id"])
-    return len(task_ids)
-
-
-def _parse_todoist_input(ctx: ProviderContext) -> tuple[str, list[str], str]:
-    api_token = ctx.provider_config.get("api_token")
-    if not isinstance(api_token, str) or not api_token:
-        raise ValueError(f"[providers.{ctx.provider_name}].api_token must be a non-empty string")
-
-    filter_values: list[str] = []
-    lang = ""
-    for request in ctx.requests:
-        filter_value = request.get("filter")
-        if filter_value is None:
-            filter_value = request.get("query")
-        if not isinstance(filter_value, str) or not filter_value:
-            raise ValueError("Todoist requests require 'filter' to be a non-empty string")
-
-        request_lang = request.get("lang")
-        if request_lang is not None and (not isinstance(request_lang, str) or not request_lang):
-            raise ValueError("Todoist request 'lang' must be a non-empty string when provided")
-        if request_lang is not None:
-            lang = request_lang
-
-        filter_values.append(filter_value)
-
-    return api_token, filter_values, lang
-
-
-class TodoistProvider:
-    kind: ClassVar[str] = "todoist"
-
-    def count(self, ctx: ProviderContext) -> int:
-        api_token, filter_values, lang = _parse_todoist_input(ctx)
-        return get_task_count(api_token, filter_values=filter_values, lang=lang)
-
-
-provider_registry.register(TodoistProvider)
