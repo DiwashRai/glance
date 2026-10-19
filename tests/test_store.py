@@ -5,8 +5,7 @@ import pytest
 
 from app.core import events_log
 from app.core.events_log import History
-from app.core.model import Event, Lists, ParkedTask, Task, Waiting
-from app.core.tasks_md import Problem
+from app.core.model import Event, Lists, ParkedTask, Problem, Task, Waiting
 from app.store import EVENTS_TAIL, NO_FILE, Snapshot, Store, Unreadable
 
 AT = datetime(2026, 10, 17, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))

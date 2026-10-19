@@ -4,8 +4,7 @@ import pytest
 
 from app.core import events_log
 from app.core.events_log import History
-from app.core.model import Event, Idle
-from app.core.tasks_md import Problem
+from app.core.model import Event, Idle, Problem
 from app.core.today import Day, Span, day, duration_text, total, worked
 
 ZONE = timezone(timedelta(hours=1))

@@ -1,6 +1,5 @@
-"""Today: what I was on, and when, worked out from the history. Pure, with the time passed in.
-
-Planned blocks and meetings join it later.
+"""Today: what I was on, and when, worked out from the history, beside the planned blocks. Pure,
+with the time passed in.
 """
 
 from __future__ import annotations
@@ -11,8 +10,7 @@ from datetime import datetime, timedelta
 from itertools import pairwise
 
 from app.core.events_log import History, as_written
-from app.core.model import Block, Event, EventKind, FromQuick, Idle, Task, working
-from app.core.tasks_md import Problem
+from app.core.model import Block, Event, EventKind, FromQuick, Idle, Problem, Task, working
 
 STARTS: tuple[EventKind, ...] = ("started", "resumed")
 STOPS: tuple[EventKind, ...] = ("parked", "waiting", "finished")  # not "crossed": see worked

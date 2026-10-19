@@ -13,7 +13,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QLabel, QWidget
 
-BACKGROUND = "#0d0d0f"
 CARD = "#151517"
 BORDER = "#2a2a2d"
 ACTIVE_CARD = "#1a150e"

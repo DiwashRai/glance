@@ -15,8 +15,6 @@ from typing import TypeVar
 from app.core import blocks, steps
 from app.core.model import (
     FOCUS_SLOTS,
-    AllDone,
-    BackTo,
     Block,
     CommandWords,
     Event,
@@ -25,8 +23,6 @@ from app.core.model import (
     LeftOff,
     Lists,
     NoPlan,
-    NoSteps,
-    OnlyLeft,
     OnStep,
     ParkedTask,
     Plan,
@@ -49,12 +45,9 @@ class New:
 
 @dataclass(frozen=True)
 class Park:
-    note: str
+    """`park` (left off, with an optional note) or `wait` (on something)."""
 
-
-@dataclass(frozen=True)
-class Wait:
-    on: str
+    reason: LeftOff | Waiting
 
 
 @dataclass(frozen=True)
@@ -120,19 +113,7 @@ class Ask:
 
 
 Command = (
-    New
-    | Park
-    | Wait
-    | Switch
-    | Done
-    | Focus
-    | Unfocus
-    | Quick
-    | AddStep
-    | Skip
-    | Finish
-    | Unblock
-    | Typed
+    New | Park | Switch | Done | Focus | Unfocus | Quick | AddStep | Skip | Finish | Unblock | Typed
 )
 
 
@@ -176,8 +157,8 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
     argument = " ".join(rest[0].split()) if rest else ""
     commands: tuple[tuple[tuple[str, ...], Callable[[str], Command]], ...] = (
         (words.new, New),
-        (words.park, Park),
-        (words.wait, Wait),
+        (words.park, lambda note: Park(LeftOff(note))),
+        (words.wait, lambda on: Park(Waiting(on))),
         (words.switch, Switch),
         (words.done, Done),
         (words.focus, Focus),
@@ -229,8 +210,8 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
     match command:
         case New(title=title):
             return _new(lists, title, now)
-        case Park() | Wait():
-            return _away(lists, command, now)
+        case Park(reason=reason):
+            return _park(lists, reason, now)
         case Switch(query=query):
             return _switch(lists, query, now)
         case Done(query=query):
@@ -247,22 +228,20 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _unblock(lists, query, now)
 
 
-def _set_aside(
-    lists: Lists, reason: LeftOff | Waiting, now: datetime
-) -> tuple[Lists, tuple[Event, ...], str]:
+def _set_aside(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied:
     """The lists with the active task (if any) put away, its event, and what to say about it. A
     Quick item put away with no note goes back to Quick; with a note, or waiting, it's become a
     real task, so it goes on top of Parked like any other."""
     match lists.active:
         case Idle():
-            return lists, (), ""
+            return Applied(lists, (), "")
         case FromQuick(task=task) if reason == LeftOff():
             back = replace(lists, active=Idle(), quick=smallest_first((*lists.quick, task)))
             event = Event(now, "parked", task.title, "back in quick")
-            return back, (event,), f"put {shown(task)} back in quick"
+            return Applied(back, (event,), f"put {shown(task)} back in quick")
         case FromQuick(task=task) | (Task() as task):
             aside = replace(lists, active=Idle(), parked=(ParkedTask(task, reason), *lists.parked))
-            return aside, (_parked_event(task, reason, now),), _parked_said(task, reason)
+            return Applied(aside, (_parked_event(task, reason, now),), _parked_said(task, reason))
 
 
 def _parked_event(task: Task, reason: LeftOff | Waiting, now: datetime) -> Event:
@@ -291,28 +270,20 @@ def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
     task = sized(title)
     if not task.title:
         return Rejected("a task needs a title")
-    aside, events, said = _set_aside(lists, LeftOff(), now)
-    events = (*events, Event(now, "started", task.title))
-    return Applied(replace(aside, active=task), events, f"started {shown(task)}{_and(said)}")
-
-
-def _away(lists: Lists, command: Park | Wait, now: datetime) -> Applied | Rejected:
-    match command:
-        case Park(note=note):
-            return _park(lists, LeftOff(note), now)
-        case Wait(on=""):
-            return Rejected("wait on what?")
-        case Wait(on=on):
-            return _park(lists, Waiting(on), now)
+    aside = _set_aside(lists, LeftOff(), now)
+    events = (*aside.events, Event(now, "started", task.title))
+    said = f"started {shown(task)}{_and(aside.message)}"
+    return Applied(replace(aside.lists, active=task), events, said)
 
 
 def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | Rejected:
-    match lists.active:
-        case Idle():
+    match lists.active, reason:
+        case _, Waiting(on=""):
+            return Rejected("wait on what?")
+        case Idle(), _:
             return Rejected("nothing is active")
-        case FromQuick() | Task():
-            aside, events, said = _set_aside(lists, reason, now)
-            return Applied(aside, events, said)
+        case FromQuick() | Task(), _:
+            return _set_aside(lists, reason, now)
 
 
 def _done(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
@@ -453,6 +424,11 @@ def _pick(rows: tuple[tuple[str, str], ...], query: str, refusal: str) -> _Picke
     return _row(query, len(rows), refusal) if _is_number(query) else Rejected(refusal)
 
 
+def _row_or_name(rows: tuple[tuple[str, str], ...], query: str, refusal: str) -> _Picked | Rejected:
+    """A number is always the row on the card, never part of a name; other text is a name."""
+    return _row(query, len(rows), refusal) if _is_number(query) else _pick(rows, query, refusal)
+
+
 def _quick_row(query: str, quick: tuple[Task, ...]) -> _Picked | Rejected:
     """`q2` is always Quick's row 2, never a title with "q2" in it, and a row that isn't there is
     refused rather than guessed."""
@@ -502,32 +478,25 @@ def _resume(
 ) -> Applied:
     """`rest` has the chosen task taken out; the active one is put away, then `active` (the
     chosen task, marked if it came from Quick) takes its place."""
-    aside, events, said = _set_aside(rest, LeftOff(), now)
-    message = f"switched to {shown(task)}{_and(said)}{reminder}"
-    events = (*events, Event(now, "resumed", task.title))
-    return Applied(replace(aside, active=active), events, message)
+    aside = _set_aside(rest, LeftOff(), now)
+    message = f"switched to {shown(task)}{_and(aside.message)}{reminder}"
+    events = (*aside.events, Event(now, "resumed", task.title))
+    return Applied(replace(aside.lists, active=active), events, message)
 
 
 def _reminder(chosen: ParkedTask) -> str:
     """What the task was parked with, so switching back to it says where I was. With no note,
     its step is the note."""
-    match chosen.reason:
-        case Waiting(on=on):
+    task = chosen.task
+    match chosen.reason, where(task):
+        case Waiting(on=on), _:
             return f" · was waiting on {on}"
-        case LeftOff(note=""):
-            return _step_reminder(chosen.task)
-        case LeftOff(note=note):
-            return f" · left off: {note}"
-
-
-def _step_reminder(task: Task) -> str:
-    match where(task):
-        case OnStep():
+        case LeftOff(note=""), OnStep():
             return f" · on {step_line(task)}"
-        case BackTo() | OnlyLeft() | AllDone():
-            return f" · {step_line(task)}"
-        case NoSteps():
-            return ""
+        case LeftOff(note=""), _:
+            return _and(step_line(task))  # "" with no steps
+        case LeftOff(note=note), _:
+            return f" · left off: {note}"
 
 
 def _focus(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
@@ -546,12 +515,7 @@ def _unfocus(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
     row 1, since the goal is gone once it's saved."""
     if not query:
         return Rejected("unfocus which? its number or name")
-    refusal = f"no focus matches '{query}'"
-    titles = _numbered(lists.focus)
-    picked = (
-        _row(query, len(titles), refusal) if _is_number(query) else _pick(titles, query, refusal)
-    )
-    match picked:
+    match _row_or_name(_numbered(lists.focus), query, f"no focus matches '{query}'"):
         case Rejected() as rejected:
             return rejected
         case _Picked(index=index):
@@ -614,10 +578,8 @@ def _unblock(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
         return Rejected("unblock which? its number or name")
     if not planned:
         return Rejected("nothing is planned today")
-    refusal = f"no block today matches '{query}'"
     names = _numbered(f"{block.what} {blocks.times(block)}" for block in planned)
-    picked = _row(query, len(names), refusal) if _is_number(query) else _pick(names, query, refusal)
-    match picked:
+    match _row_or_name(names, query, f"no block today matches '{query}'"):
         case Rejected() as rejected:
             return rejected
         case _Picked(index=index):

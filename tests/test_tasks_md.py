@@ -1,7 +1,7 @@
 import pytest
 
-from app.core.model import FromQuick, Idle, LeftOff, Lists, ParkedTask, Step, Task, Waiting
-from app.core.tasks_md import Problem, parse, render
+from app.core.model import FromQuick, Idle, LeftOff, Lists, ParkedTask, Problem, Step, Task, Waiting
+from app.core.tasks_md import parse, render
 
 EXAMPLE = """\
 # Active

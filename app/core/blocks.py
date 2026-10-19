@@ -67,14 +67,14 @@ def typed(text: str, now: time) -> Found | NotABlock | Refused:
     end of the name means the same (`run ! 6pm for 1h`), so a name never ends in one: tasks.md
     would read it as the marker. `!!` counts as `!`."""
     words = tuple(WORD.finditer(text))
-    end = tuple(word for word in words[-1:] if _is_bang(word))
+    end = tuple(word for word in words[-1:] if _is_bang(word[0]))
     body = words[: len(words) - len(end)]
     tail = body[-3:]
     kinds = tuple(_kind(word[0].lower(), now) for word in tail)
     if kinds not in SHAPES:
         return NotABlock()
     named = body[:-3]
-    named_bang = tuple(word for word in named[-1:] if _is_bang(word))
+    named_bang = tuple(word for word in named[-1:] if _is_bang(word[0]))
     name = " ".join(word[0] for word in named[: len(named) - len(named_bang)])
     bangs = (*named_bang, *end)
     if not name:
@@ -97,8 +97,8 @@ def _kind(said: str, now: time) -> Kind:
     return "time" if _times(said, now) else "other"
 
 
-def _is_bang(word: re.Match[str]) -> bool:
-    return not word[0].strip(MUST)
+def _is_bang(word: str) -> bool:
+    return not word.strip(MUST)
 
 
 def _times(said: str, now: time) -> tuple[time, ...]:
@@ -183,7 +183,7 @@ def _end(start: time, hour: str, minute: str, rest: str) -> _Until | Refused:
 def _must(what: str) -> tuple[str, bool]:
     """A `!` (or `!!`) on its own at the end, as when typed, so `ship it!` stays a name."""
     words = what.split()
-    if [word.strip(MUST) for word in words[-1:]] == [""]:
+    if any(_is_bang(word) for word in words[-1:]):
         return " ".join(words[:-1]), True
     return " ".join(words), False
 

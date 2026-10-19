@@ -15,8 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import get_args
 
-from app.core.model import Event, EventKind
-from app.core.tasks_md import Problem
+from app.core.model import Event, EventKind, Problem
 
 LINE = re.compile(r"(\S+ \S+) +(\S+) +(.+)")
 STAMP = re.compile(
