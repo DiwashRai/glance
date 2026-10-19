@@ -33,12 +33,11 @@ BACKDROP_DIM = 0.6  # how dark the screen behind the overlay goes, 0 to 1
 
 # The HUD on the taskbar (canvas boards W1 to W9)
 HUD_TEXT_LIGHT = "#1b1b1d"  # text on a light taskbar
-HUD_QUIET_DARK = "#3a3a3f"  # a quiet count's badge, dark taskbar
-HUD_QUIET_LIGHT = "#6b6b70"  # a quiet count's badge, light taskbar
-HUD_RIM_LIGHT = "#eeeeee"  # a badge's rim: roughly the taskbar's own colour, light
-HUD_RIM_DARK = "#1c1c1c"  # and dark
-HUD_WARN = "background: #b35c00;"  # level 2
-HUD_ALERT = "background: #c0392b;"  # level 3, or a failed provider
+# Each count is a chip tinted in its source's colour, by the icon it names; others are blue
+HUD_SOURCES = {"todo": "#e8604c", "mail": "#4c9aff", "jira": "#36b3d9", "pr": "#a47cf3"}
+HUD_TINT = {False: 55, True: 60}  # how strong the tint is, out of 255, on a dark or light bar
+HUD_HIGH = "#d97706"  # a chip at level 2 is solid amber
+HUD_ALERT = "#dc2626"  # and at level 3, or for a failed provider, solid red
 HUD_BOX = f"background: {CARD}; border: 1px solid {BORDER}; border-radius: 8px;"
 
 FONTS = ["JetBrains Mono", "JetBrainsMono NF", "Cascadia Mono", "Consolas"]

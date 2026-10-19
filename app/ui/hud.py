@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QGuiApplication, QMouseEvent
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
 from app.core.model import HudSettings, Idle, Lists, Task, step_line, working
@@ -66,8 +66,8 @@ class Hud(QWidget):
         self.frame = QFrame(self)
         self.frame.setObjectName("hud")  # so the box style applies to the box, not its contents
         self.row = QHBoxLayout(self.frame)
-        self.row.setContentsMargins(10, 0, 10, 0)  # the full height for the badged icons
-        self.row.setSpacing(16)
+        self.row.setContentsMargins(10, 0, 10, 0)
+        self.row.setSpacing(8)
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self.frame)
@@ -145,25 +145,15 @@ class Hud(QWidget):
 class _Style:
     frame: str
     text: str
-    levels: tuple[str, ...]  # the number's stylesheet at levels 0 to 3
-    badged: bool  # numbers sit on their icon's corner, like a notification badge
+    light: bool  # the chips sit on a light background
 
     @staticmethod
     def of(settings: HudSettings, *, light: bool) -> _Style:
-        """Native: transparent on the taskbar, following its theme, with each count as a badge on
-        its icon, rimmed in the taskbar's colour. Box: a dark box, with coloured numbers."""
+        """Native: transparent on the taskbar, following its theme. Box: a dark box."""
         if settings.look == "box":
-            plain = f"color: {theme.TEXT};"
-            levels = (plain, plain, f"color: {theme.ORANGE};", f"color: {theme.RED};")
-            return _Style(theme.HUD_BOX, theme.TEXT, levels, badged=False)
+            return _Style(theme.HUD_BOX, theme.TEXT, light=False)
         text = theme.HUD_TEXT_LIGHT if light else theme.TEXT
-        quiet = f"background: {theme.HUD_QUIET_LIGHT if light else theme.HUD_QUIET_DARK};"
-        rim = theme.HUD_RIM_LIGHT if light else theme.HUD_RIM_DARK
-        badge = (
-            f" color: {theme.BRIGHT}; border: 2px solid {rim}; border-radius: 7px; padding: 0 4px;"
-        )
-        levels = tuple(fill + badge for fill in (quiet, quiet, theme.HUD_WARN, theme.HUD_ALERT))
-        return _Style("background: transparent;", text, levels, badged=True)
+        return _Style("background: transparent;", text, light)
 
 
 def _active_title(active: Task | Idle) -> str:
@@ -178,51 +168,61 @@ def _active_title(active: Task | Idle) -> str:
 
 def _active(title: str, style: _Style, room: int) -> QWidget:
     """An orange dot, like the Active card's border, then the title."""
-    dot = theme.label("●", "dim", 11)
-    dot.setStyleSheet(f"color: {theme.ORANGE};")
-    name = theme.label("", "title", 13)
-    name.setStyleSheet(f"color: {style.text};")
+    name = _text("", style.text, 13)
     shortened = name.fontMetrics().elidedText(title, Qt.TextElideMode.ElideRight, room)
     name.setText(shortened)
     name.setToolTip(title if shortened != title else "")
-    return _beside(dot, name)
+    return _beside(_text("●", theme.ORANGE, 11), name)
 
 
 def _all_clear() -> QWidget:
     """A green tick, like v1's "all clear", when nothing is active and every count is zero."""
-    tick = theme.label("✓", "dim", 20, QFont.Weight.Bold)
-    tick.setStyleSheet(f"color: {theme.GREEN};")
+    tick = _text("✓", theme.GREEN, 20, QFont.Weight.Bold)
     tick.setToolTip("all clear")
     return tick
 
 
 def _count(count: Count, settings: HudSettings, style: _Style) -> QWidget:
-    """The entry's icon or label, with its number. A count of -1 means its provider failed,
-    shown as a red "!"."""
+    """A chip: the entry's icon (or label) and number, tinted in its source's colour while it's
+    calm, so the HUD is never grey on grey; solid amber when it's high, red when it's very high.
+    A count of -1 means its provider failed: a red "!"."""
     failed = count.value < 0
-    weight = QFont.Weight.Bold if style.badged else QFont.Weight.Normal
-    number = theme.label(
-        "!" if failed else str(count.value), "dim", 11 if style.badged else 13, weight
-    )
-    number.setStyleSheet(style.levels[3 if failed else count.level])
-    number.setToolTip(f"{count.label}: {'failed' if failed else count.value}")
+    level = 3 if failed else count.level
+    source = QColor(theme.HUD_SOURCES.get(count.icon, theme.BLUE))
+    if level >= 2:
+        fill, ink = (theme.HUD_HIGH if level == 2 else theme.HUD_ALERT), theme.BRIGHT
+    else:
+        source.setAlpha(theme.HUD_TINT[style.light])
+        fill = source.name(QColor.NameFormat.HexArgb)
+        source.setAlpha(255)
+        ink = (source.darker(140) if style.light else source.lighter(125)).name()
+    chip = QFrame()
+    chip.setObjectName("chip")  # so the style is the chip's, not its contents'
+    chip.setStyleSheet(f"QFrame#chip {{ background: {fill}; border-radius: 8px; }}")
+    chip.setToolTip(f"{count.label}: {'failed' if failed else count.value}")
+    inside = QHBoxLayout(chip)
+    inside.setContentsMargins(7, 3, 9, 3)
+    inside.setSpacing(5)
+    inside.addWidget(_symbol(count, settings, ink))
+    inside.addWidget(_text("!" if failed else str(count.value), ink, 13, QFont.Weight.Bold))
+    return chip
+
+
+def _symbol(count: Count, settings: HudSettings, colour: str) -> QLabel:
+    """Its label, or an outline icon if the entry names one in icons.HUD, else its icon text."""
     if settings.labels == "text":
-        name = theme.label(count.label, "dim", 13)
-        name.setStyleSheet(f"color: {style.text};")
-        return _beside(name, number)
-    symbol = _symbol(count.icon, style.text)
-    return _badged(symbol, number) if style.badged else _beside(symbol, number)
-
-
-def _symbol(icon: str, colour: str) -> QLabel:
-    """An outline icon if the entry names one in icons.HUD, else its text."""
-    if icon in icons.HUD:
-        symbol = QLabel()
-        symbol.setPixmap(icons.pixmap(icons.HUD[icon], colour, 20))
-        return symbol
-    symbol = theme.label(icon, "dim", 17)
-    symbol.setStyleSheet(f"color: {colour};")
+        return _text(count.label, colour, 13)
+    if count.icon not in icons.HUD:
+        return _text(count.icon, colour, 15)
+    symbol = QLabel()
+    symbol.setPixmap(icons.pixmap(icons.HUD[count.icon], colour, 16))
     return symbol
+
+
+def _text(text: str, colour: str, size: int, weight: QFont.Weight = QFont.Weight.Normal) -> QLabel:
+    shown = theme.label(text, "dim", size, weight)
+    shown.setStyleSheet(f"color: {colour};")
+    return shown
 
 
 def _beside(*widgets: QWidget) -> QWidget:
@@ -232,21 +232,4 @@ def _beside(*widgets: QWidget) -> QWidget:
     row.setSpacing(6)
     for widget in widgets:
         row.addWidget(widget)
-    return cell
-
-
-def _badged(symbol: QLabel, number: QLabel) -> QWidget:
-    """The number on the icon's bottom-right corner. Placed by hand: a layout can't overlap."""
-    cell = QWidget()
-    cell.setToolTip(number.toolTip())
-    for child in (symbol, number):  # the number last, so it's drawn on top
-        child.setParent(cell)
-        child.adjustSize()
-    number.setMinimumWidth(number.height())  # a single digit is a circle
-    number.adjustSize()
-    symbol.move(0, 3)
-    x = symbol.width() - 7
-    y = symbol.y() + symbol.height() - number.height() + 5
-    number.move(x, y)
-    cell.setFixedSize(x + number.width(), y + number.height())
     return cell
