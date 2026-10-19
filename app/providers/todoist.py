@@ -41,16 +41,16 @@ class _Page(msgspec.Struct):
 def count(provider: Table, requests: Sequence[Table]) -> int:
     token = msgspec.convert(provider, _Config).api_token
     asked = [msgspec.convert(request, _Request) for request in requests]
-    return len(set[str]().union(*(_task_ids(token, request) for request in asked)))
+    if not all(request.filter or request.query for request in asked):
+        raise ValueError("a Todoist request needs a filter")
+    return len({task for request in asked for task in _task_ids(token, request)})
 
 
 def _task_ids(token: str, request: _Request) -> set[str]:
-    query = request.filter or request.query
-    if not query:
-        raise ValueError("a Todoist request needs a filter")
     found: set[str] = set()
     cursor = ""
     for _ in range(MAX_PAGES):
+        query = request.filter or request.query
         answer = _load_page(_page_request(token, query, request.lang, cursor))
         page = msgspec.json.decode(answer, type=_Page)
         found.update(task.id for task in page.results)

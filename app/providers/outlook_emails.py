@@ -29,16 +29,16 @@ class _Failed(msgspec.Struct):
 def count(provider: Table, requests: Sequence[Table]) -> int:
     store = msgspec.convert(provider, _Config).outlook_store.lower()
     folders = [name for request in requests for name in msgspec.convert(request, _Request).folders]
-    numbered = tuple(str(int(name)) for name in folders if name.isdigit())
-    unread = _unread(store, numbered)
+    numbered = {name: str(int(name)) for name in folders if name.isdigit()}  # "06" is 6
+    counts = unread(store, tuple(sorted(set(numbered.values()))))
     return sum(
-        unread["default"][str(int(name))] if name.isdigit() else unread[store][name.lower()]
+        counts["default"][numbered[name]] if name in numbered else counts[store][name.lower()]
         for name in folders
     )
 
 
 @functools.cache
-def _unread(store: str, numbered: tuple[str, ...]) -> dict[str, dict[str, int]]:
+def unread(store: str, numbered: tuple[str, ...]) -> dict[str, dict[str, int]]:
     """Unread counts by folder: the store's under its address, the numbered ones under "default".
     The script runs once a run for each store and set of numbers, however many entries ask."""
     command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"]

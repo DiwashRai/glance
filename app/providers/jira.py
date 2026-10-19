@@ -33,7 +33,7 @@ class _Page(msgspec.Struct):
 def count(provider: Table, requests: Sequence[Table]) -> int:
     config = msgspec.convert(provider, _Config)
     searches = [jql for request in requests for jql in msgspec.convert(request, _Request).jql]
-    return len(set[str]().union(*(_issue_ids(config, jql) for jql in searches)))
+    return len({issue for jql in searches for issue in _issue_ids(config, jql)})
 
 
 def _issue_ids(config: _Config, jql: str) -> set[str]:

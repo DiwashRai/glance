@@ -22,12 +22,19 @@ def collector(text: str) -> update_status.Collector:
     return msgspec.convert(update_status.tomllib.loads(text), update_status.Collector)
 
 
-def entry(provider: str, label: str) -> str:
+def entry(provider: str, label: str, requests: str = '[{ key = "k", start = 4, step = 1 }]') -> str:
     return (
         f'[[entries]]\nprovider = "{provider}"\nlabel = "{label}"\nicon = ""\n'
-        "thresholds = { low = 1, medium = 2, high = 3 }\n"
-        'requests = [{ key = "k", start = 4, step = 1 }]\n'
+        f"thresholds = {{ low = 1, medium = 2, high = 3 }}\nrequests = {requests}\n"
     )
+
+
+@pytest.fixture(autouse=True)
+def fresh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The dummy provider reads its counts file from the working folder, and the Outlook
+    script's answers are kept for the run."""
+    monkeypatch.chdir(tmp_path)
+    outlook_emails.unread.cache_clear()
 
 
 def test_the_demo_config_counts_down_and_is_written_a_row_to_a_line() -> None:
@@ -54,9 +61,13 @@ def test_an_entry_that_fails_is_minus_one_and_the_others_still_count() -> None:
     assert rows == [("ok", "", 3, 3), ("a", "", -1, 3), ("b", "", -1, 3)]
 
 
-def test_a_bad_config_is_refused_naming_the_key() -> None:
-    with pytest.raises(msgspec.ValidationError, match=r"entries\[0\]\.label"):
-        collector(entry("demo", ""))
+@pytest.mark.parametrize(
+    ("text", "key"),
+    [(entry("demo", ""), "label"), (entry("demo", "x", requests="[]"), "requests")],
+)
+def test_a_bad_config_is_refused_naming_the_key(text: str, key: str) -> None:
+    with pytest.raises(msgspec.ValidationError, match=rf"entries\[0\]\.{key}"):
+        collector(text)
 
 
 def test_todoist_pages_and_counts_a_task_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,13 +137,13 @@ def test_outlook_adds_named_and_numbered_folders_running_the_script_once(
     monkeypatch.setattr(outlook_emails, "run_no_window", script)
     provider = {"kind": "outlook", "outlook_store": "Me@x.com"}
     assert outlook_emails.count(provider, [{"folders": ["6", "Team"]}]) == 6
-    assert outlook_emails.count(provider, [{"folders": ["6", "inbox"]}]) == 5
+    assert outlook_emails.count(provider, [{"folders": ["inbox", "06"]}]) == 5
     assert len(calls) == 1 and calls[0][-2:] == ["-DefaultFolderIds", "6"]
 
     def failing(command: list[str]) -> subprocess.CompletedProcess[str]:
         return ran({"error": "no Outlook"})
 
-    # another store, as the script's answers are kept for the rest of the run
+    outlook_emails.unread.cache_clear()
     monkeypatch.setattr(outlook_emails, "run_no_window", failing)
     with pytest.raises(RuntimeError, match="no Outlook"):
-        outlook_emails.count({"outlook_store": "other@x.com"}, [{"folders": ["inbox"]}])
+        outlook_emails.count(provider, [{"folders": ["inbox"]}])

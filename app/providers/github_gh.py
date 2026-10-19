@@ -20,9 +20,9 @@ class _Pr(msgspec.Struct):
 
 def count(_provider: Table, requests: Sequence[Table]) -> int:
     """`gh` has its own login, so `[providers.<name>]` needs nothing but its kind."""
+    searches = [msgspec.convert(request, _Request).args for request in requests]  # all, first
     urls: set[str] = set()
-    for request in requests:
-        args = msgspec.convert(request, _Request).args
+    for args in searches:
         completed = run_no_window(["gh", "search", "prs", "--json", "url", *args])
         if completed.returncode != 0:
             message = completed.stderr.strip() or completed.stdout.strip()

@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Annotated
 
 import msgspec
 
@@ -39,7 +40,8 @@ class Entry(msgspec.Struct, frozen=True):
     label: NonEmpty
     icon: str
     thresholds: Thresholds
-    requests: tuple[Table, ...] = ()  # checked by the provider
+    # what to ask the provider, each checked by it. None would be a count of 0, so it's refused
+    requests: Annotated[tuple[Table, ...], msgspec.Meta(min_length=1)]
 
 
 class Collector(msgspec.Struct, frozen=True):
