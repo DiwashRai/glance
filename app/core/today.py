@@ -73,10 +73,11 @@ def logged(history: Log, events: Sequence[Event]) -> Log:
 
 
 def worked(events: Sequence[Event], now: datetime, active: str) -> tuple[Span, ...]:
-    """Each start runs until the next start or stop. Ticking off a Quick item (`crossed`) is
-    neither: Active carries on. The last start, if nothing stopped it, is still going only while
-    it's the active task (`active`, its title as written, or "" when nothing is): if tasks.md
-    was edited by hand, when it stopped isn't known, so it's left out.
+    """Each start runs until the next start or stop. Ticking off a Quick item (`crossed`) or
+    removing a row (`removed`) is neither: Active carries on. The last start, if nothing stopped
+    it, is still going only while it's the active task (`active`, its title as written, or ""
+    when nothing is): if tasks.md was edited by hand, when it stopped isn't known, so it's left
+    out.
     """
     moves = [event for event in events if event.kind in STARTS or event.kind in STOPS]
     spans = [Span(a.title, a.at, b.at) for a, b in pairwise(moves) if a.kind in STARTS]

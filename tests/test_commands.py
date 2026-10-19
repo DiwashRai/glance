@@ -13,14 +13,17 @@ from app.core.commands import (
     Focus,
     New,
     Park,
+    Preview,
     Quick,
     Rejected,
+    Remove,
     Skip,
     Switch,
     Typed,
     Unfocus,
     apply,
     parse_command,
+    preview,
 )
 from app.core.model import (
     CommandWords,
@@ -77,6 +80,7 @@ def applied(lists: Lists, text: str) -> Applied:
         ("unfocus 2", Unfocus("2")),
         ("q merge 1129 ~3m", Quick("merge 1129 ~3m")),
         ("done q2", Done("q2")),
+        ("RM p2", Remove("p2")),
         ("step rerun CI", AddStep("rerun CI")),
         (">", Skip()),
         ("finish", Finish()),
@@ -258,6 +262,10 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "skip", "no steps to skip · step <text> adds one"),
         (DAY, "skip it", "skip moves past the current step: type just skip"),
         (DAY, "finish now", "finish finishes the active task: type just finish"),
+        (DAY, "rm 1129", "rm f1, p1 or q1"),
+        (DAY, "rm p3", "there's no p3 in parked"),
+        (DAY, "rm q1", "there's no q1 in quick"),
+        (DAY, "rm f1", "no focus matches '1'"),
     ],
 )
 def test_rejections_say_why_and_change_nothing(lists: Lists, text: str, reason: str) -> None:
@@ -280,6 +288,32 @@ def test_done_ticks_off_a_quick_item_without_making_it_active() -> None:
     result = applied(QUICK_DAY, "done q1")
     assert result.lists == replace(QUICK_DAY, quick=(REPLY,))
     assert result.events == (Event(NOW, "crossed", "merge 1129"),)
+
+
+@pytest.mark.parametrize(
+    ("text", "left", "event", "said"),
+    [
+        ("rm p2", replace(QUICK_DAY, parked=(WAITING,)), "tidy logging config", "parked"),
+        ("rm Q1", replace(QUICK_DAY, quick=(REPLY,)), "merge 1129", "quick"),
+    ],
+)
+def test_rm_takes_a_row_off_its_card_and_leaves_the_rest(
+    text: str, left: Lists, event: str, said: str
+) -> None:
+    result = applied(QUICK_DAY, text)
+    assert result.lists == left
+    assert result.events == (Event(NOW, "removed", event, f"from {said}"),)
+    assert result.message.startswith(f"removed {event}")
+    assert applied(FOCUSED, "rm f2").lists.focus == GOALS[:1]  # as unfocus 2 does
+
+
+@pytest.mark.parametrize(
+    ("text", "note"),
+    [("rm p2", "removes tidy logging config"), ("rm q9", "there's no q9 in quick")],
+)
+def test_rm_says_what_it_would_remove_before_enter(text: str, note: str) -> None:
+    """It can't be undone, and the cards number Parked 1, 2…, not p1, p2…"""
+    assert preview(text, WORDS, QUICK_DAY, NOW) == Preview(((0, 2),), note)
 
 
 def test_a_quick_item_switched_to_goes_back_to_quick_unless_it_gains_a_note() -> None:

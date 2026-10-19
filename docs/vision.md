@@ -118,6 +118,7 @@ As I type, the words glance picked up are coloured, so I can see what it will do
 | `unfocus <name or number>` | Take something out of Focus |
 | `<what> <time> for <length>` | Plan a block today: `deep work 2pm for 2h`, or `call for 30m 9` (the next 9 o'clock). `!` at the end marks it must-happen. It cuts back any block it lands on, except a must-happen one |
 | `unblock <name or number>` | Take a block off today's plan |
+| `rm f1` / `rm p1` / `rm q1` | Take a row off Focus, Parked or Quick without starting or finishing it, by row only |
 
 Keys in the overlay and on drop cards:
 

@@ -35,6 +35,7 @@ Glance has two parts:
 | `unfocus <name or number>` | Take a goal out of Focus |
 | `quick <text> ~5m` (or `q`) | Add something small to do while you wait; the size is optional |
 | `unblock <name or number>` | Take a block off today's plan |
+| `rm f1` / `rm p1` / `rm q1` | Take a row off Focus, Parked or Quick without starting it or finishing it. By row only |
 
 As you type, the words glance picked up turn blue (a block's time and length, or a command word),
 and a note on the right says which blocks a new one cuts back. No blue means it'll be a task.

@@ -198,6 +198,7 @@ EventKind = Literal[
     "resumed",
     "finished",
     "crossed",  # a Quick item ticked off without starting it
+    "removed",  # a Parked or Quick item taken off its card, not done
     "focused",
     "unfocused",
     "added",
@@ -249,5 +250,6 @@ class CommandWords:
     skip: tuple[str, ...] = ("skip", ">")
     finish: tuple[str, ...] = ("finish",)
     unblock: tuple[str, ...] = ("unblock",)
+    remove: tuple[str, ...] = ("rm",)
     # Not command words: the agents a line starting with one space goes to, then two or more
     agents: tuple[str, ...] = ("assistant", "chief")

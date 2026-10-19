@@ -95,6 +95,11 @@ class Unblock:
 
 
 @dataclass(frozen=True)
+class Remove:
+    row: str  # f1, p2, q3: a row on the Focus, Parked or Quick card
+
+
+@dataclass(frozen=True)
 class Typed:
     """No command word: a block if it ends in a time and a length, else a new task. The text is
     as it was typed, so the words picked up from it can be shown where they are."""
@@ -111,9 +116,9 @@ class Ask:
     text: str
 
 
-Command = (
-    New | Park | Switch | Done | Focus | Unfocus | Quick | AddStep | Skip | Finish | Unblock | Typed
-)
+CardCommand = Focus | Unfocus | Remove  # a goal, or a row on a card
+StepCommand = AddStep | Skip | Finish  # the active task's steps
+Command = New | Park | Switch | Done | Quick | Unblock | Typed | CardCommand | StepCommand
 
 
 @dataclass(frozen=True)
@@ -167,6 +172,7 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
         (words.skip, Skip),
         (words.finish, Finish),
         (words.unblock, Unblock),
+        (words.remove, Remove),
     )
     for command_words, command in commands:
         if word in command_words:
@@ -176,14 +182,22 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
 
 def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Preview:
     """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
-    the command before it runs. A block's time, length and `!` are marked, with what it cuts."""
+    the command before it runs. A block's time, length and `!` are marked, with what it cuts, and
+    `rm` says what it would remove, as that can't be undone."""
+    word = tuple(found.span() for found in blocks.WORD.finditer(text))[:1]
     match parse_command(text, words):
         case Ask(agent=agent):
             return Preview(agent=agent, note=agent)
         case Typed():
             return _preview_block(lists, text, now)
+        case Remove() as remove:
+            match apply(lists, remove, now):
+                case Applied(events=events):
+                    return Preview(word, f"removes {events[0].title}")
+                case Rejected(reason=reason):
+                    return Preview(word, reason)
         case _:
-            return Preview(tuple(word.span() for word in blocks.WORD.finditer(text))[:1])
+            return Preview(word)
 
 
 def _preview_block(lists: Lists, text: str, now: datetime) -> Preview:
@@ -215,8 +229,8 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _switch(lists, query, now)
         case Done(query=query):
             return _done(lists, query, now)
-        case Focus() | Unfocus():
-            return _focus_command(lists, command, now)
+        case Focus() | Unfocus() | Remove():
+            return _card_command(lists, command, now)
         case AddStep() | Skip() | Finish():
             return _step_command(lists, command, now)
         case Quick(text=text):
@@ -309,9 +323,7 @@ def _finish(lists: Lists, task: Task, now: datetime) -> Applied:
     return Applied(replace(lists, active=Idle()), (finished,), said)
 
 
-def _step_command(
-    lists: Lists, command: AddStep | Skip | Finish, now: datetime
-) -> Applied | Rejected:
+def _step_command(lists: Lists, command: StepCommand, now: datetime) -> Applied | Rejected:
     match command, lists.active:
         case _, Idle():
             return Rejected("nothing is active")
@@ -348,12 +360,41 @@ def _skip(lists: Lists, task: Task, now: datetime) -> Applied | Rejected:
             return Rejected(why)
 
 
-def _focus_command(lists: Lists, command: Focus | Unfocus, now: datetime) -> Applied | Rejected:
+def _card_command(lists: Lists, command: CardCommand, now: datetime) -> Applied | Rejected:
     match command:
         case Focus(text=text):
             return _focus(lists, text, now)
         case Unfocus(query=query):
             return _unfocus(lists, query, now)
+        case Remove(row=row):
+            return _remove(lists, row, now)
+
+
+def _remove(lists: Lists, row: str, now: datetime) -> Applied | Rejected:
+    """`rm f1`, `rm p2`, `rm q3`: a row off the Focus, Parked or Quick card, without starting or
+    finishing it. Only by its row, as with `done q2`: it can't be undone, so glance never guesses
+    one from a name."""
+    found = CARD_ROW.fullmatch(row)
+    if not found:
+        return Rejected("rm f1, p1 or q1")
+    card, digits = found[1].lower(), found[2]
+    if card == "f":
+        return _unfocus(lists, digits, now)
+    parked = card == "p"
+    tasks = tuple(item.task for item in lists.parked) if parked else lists.quick
+    name = "parked" if parked else "quick"
+    match _row(digits, len(tasks), f"there's no {card}{digits} in {name}"):
+        case Rejected() as rejected:
+            return rejected
+        case _Picked(index=index):
+            kept = (
+                replace(lists, parked=_without(lists.parked, index))
+                if parked
+                else replace(lists, quick=_without(lists.quick, index))
+            )
+            task = tasks[index]
+            removed = Event(now, "removed", task.title, f"from {name}")
+            return Applied(kept, (removed,), f"removed {shown(task)} from {name}")
 
 
 def _tick(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
@@ -381,6 +422,7 @@ def _quick(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
 
 
 QUICK_ROW = re.compile(r"[qQ][0-9]+")  # a Quick row as the card labels it: q1, q2…
+CARD_ROW = re.compile(r"([fpqFPQ])([0-9]+)")  # for rm: f1 (focus), p1 (parked), q1 (quick)
 
 
 @dataclass(frozen=True)
