@@ -1,8 +1,8 @@
 """Planned blocks: time set aside today. Pure: text in, values out, with the time passed in.
 
 A block is typed in words, `deep work 2pm for 2h`, and written in tasks.md as
-`14:00-16:00 deep work` (or by hand with a length, `14:00 2h deep work`). A `!` at the end means
-it must happen today. Blocks on one day never overlap: a newer one cuts back the ones it lands on.
+`14:00-16:00 deep work`. A `!` at the end means it must happen today. Blocks on one day never
+overlap: a newer one cuts back the ones it lands on.
 """
 
 from __future__ import annotations
@@ -16,13 +16,13 @@ from typing import Literal
 from app.core.model import Block, NoPlan, Plan
 
 CLOCK = r"([01]?[0-9]|2[0-3]):([0-5][0-9])"
-TIMES = re.compile(rf"{CLOCK}(?:-{CLOCK})?", re.ASCII)
+TIMES = re.compile(rf"{CLOCK}-{CLOCK}", re.ASCII)
 LENGTH = re.compile(r"(?:([0-9]{1,2})h)?(?:([0-9]{1,3})m)?", re.ASCII)
 SAID = re.compile(r"([0-9]{1,2})(?::([0-5][0-9]))?(am|pm)?", re.ASCII)  # 2pm, 9:30, 14:00
 DAY = re.compile(r"([1-9][0-9]{3})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])", re.ASCII)
 WORD = re.compile(r"\S+")
 MUST = "!"
-EXAMPLE = "14:00 1h deep work, or 14:00-15:30 PR reviews"  # as tasks.md has them
+EXAMPLE = "14:00-15:30 PR reviews"  # as tasks.md has them
 
 Kind = Literal["time", "for", "length", "other"]
 
@@ -140,44 +140,14 @@ def read(text: str) -> Block | Refused:
     when, _, rest = " ".join(text.split()).partition(" ")
     found = TIMES.fullmatch(when)
     if not found:
-        return Refused(f"a block starts with its time: {EXAMPLE}")
-    start = time(int(found[1]), int(found[2]))
-    match _end(start, found[3], found[4], rest):
-        case Refused() as refused:
-            return refused
-        case _Until(end=end, what=what):
-            return _block(start, end, what)
-
-
-@dataclass(frozen=True)
-class _Until:
-    end: time
-    what: str  # the text after the times
-
-
-def _block(start: time, end: time, what: str) -> Block | Refused:
-    named, must = _must(what)
+        return Refused(f"a block starts with its times: {EXAMPLE}")
+    start, end = time(int(found[1]), int(found[2])), time(int(found[3]), int(found[4]))
+    named, must = _must(rest)
     if not named:
         return Refused(f"what's the block for? {EXAMPLE}")
     if end <= start:
         return Refused("a block ends after it starts, before midnight")
     return Block(start, end, named, must)
-
-
-def _end(start: time, hour: str, minute: str, rest: str) -> _Until | Refused:
-    """The end, given (`-15:30`) or worked out from a length (`1h`, `30m`, `1h30m`), and the
-    text after it."""
-    if hour:
-        return _Until(time(int(hour), int(minute)), rest)
-    length, _, what = rest.partition(" ")
-    minutes = _minutes(length)
-    if not minutes:
-        return Refused(f"how long? an end or a length: {EXAMPLE}")
-    match _after(start, minutes):
-        case Refused() as refused:
-            return refused
-        case end:
-            return _Until(end, what)
 
 
 def _must(what: str) -> tuple[str, bool]:

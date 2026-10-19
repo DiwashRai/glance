@@ -7,8 +7,6 @@ properties rather than CSS classes.
 
 from __future__ import annotations
 
-from typing import TypeVar
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QLabel, QWidget
@@ -45,8 +43,6 @@ HUD_BOX = f"background: {CARD}; border: 1px solid {BORDER}; border-radius: 8px;"
 
 FONTS = ["JetBrains Mono", "JetBrainsMono NF", "Cascadia Mono", "Consolas"]
 
-W = TypeVar("W", bound=QWidget)
-
 
 def font(size: int, weight: QFont.Weight = QFont.Weight.Normal, spacing: float = 0) -> QFont:
     chosen = QFont()
@@ -57,7 +53,7 @@ def font(size: int, weight: QFont.Weight = QFont.Weight.Normal, spacing: float =
     return chosen
 
 
-def styled(widget: W, role: str) -> W:
+def styled[W: QWidget](widget: W, role: str) -> W:
     widget.setProperty("role", role)
     return widget
 

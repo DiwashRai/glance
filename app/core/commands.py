@@ -10,7 +10,6 @@ import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import TypeVar
 
 from app.core import blocks, steps
 from app.core.model import (
@@ -198,12 +197,12 @@ def _preview_block(lists: Lists, text: str, now: datetime) -> Preview:
                 case blocks.Refused(why=why):
                     return Preview(marks, why)
                 case blocks.Placed(plan=plan, cut=cut):
-                    note = ", ".join(_cut_note(old, left) for old, left in cut)
-                    return Preview(marks, note, plan=plan)
+                    return Preview(marks, _cuts(cut), plan=plan)
 
 
-def _cut_note(old: Block, left: tuple[Block, ...]) -> str:
-    return f"{'trims' if left else 'replaces'} {old.what}"
+def _cuts(cut: tuple[tuple[Block, tuple[Block, ...]], ...]) -> str:
+    """`trims deep work, replaces review`: the same before Enter and after."""
+    return ", ".join(f"{'trims' if left else 'replaces'} {old.what}" for old, left in cut)
 
 
 def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
@@ -381,7 +380,6 @@ def _quick(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
     return Applied(added, (event,), f"added {shown(task)} to quick")
 
 
-T = TypeVar("T")
 QUICK_ROW = re.compile(r"[qQ][0-9]+")  # a Quick row as the card labels it: q1, q2…
 
 
@@ -435,7 +433,7 @@ def _quick_row(query: str, quick: tuple[Task, ...]) -> _Picked | Rejected:
     return _row(query[1:], len(quick), f"there's no {query.lower()} in quick")
 
 
-def _without(items: tuple[T, ...], index: int) -> tuple[T, ...]:
+def _without[T](items: tuple[T, ...], index: int) -> tuple[T, ...]:
     return (*items[:index], *items[index + 1 :])
 
 
@@ -543,25 +541,8 @@ def _place(lists: Lists, block: Block, now: datetime) -> Applied | Rejected:
             return Rejected(why)
         case blocks.Placed(plan=plan, cut=cut):
             event = Event(now, "planned", block.what, blocks.times(block))
-            cuts = "".join(_cut(old, left) for old, left in cut)
-            said = f"planned {_said(block)}{cuts}{_replaced(lists.plan, now)}"
+            said = f"planned {_said(block)}{_and(_cuts(cut))}"
             return Applied(replace(lists, plan=plan), (event,), said)
-
-
-def _cut(old: Block, left: tuple[Block, ...]) -> str:
-    """` · deep work now 14:00-15:00 and 16:00-17:00`, or ` · removed review 15:00-15:30`."""
-    if not left:
-        return f" · removed {old.what} {blocks.times(old)}"
-    return f" · {old.what} now {' and '.join(blocks.times(piece) for piece in left)}"
-
-
-def _replaced(plan: Plan | NoPlan, now: datetime) -> str:
-    """A stale plan with blocks in it goes when today's starts, so say so."""
-    match plan:
-        case Plan(day=day, blocks=old) if old and day != now.date():
-            return f" · replaces the plan for {day.isoformat()}"
-        case Plan() | NoPlan():
-            return ""
 
 
 def _said(block: Block) -> str:
