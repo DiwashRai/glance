@@ -1,10 +1,12 @@
 """The HUD: one row on every taskbar, just left of the tray on the main one and of the clock on
-the others. The active task (optional), then each count from the collector as a chip: its icon
-or label and its number, coloured by its source and its level.
+the others. Each count from the collector is a chip: its icon or label and its number, coloured
+by its source and its level. The main taskbar's row starts with the active task (optional): the
+others are narrower, and the app buttons come close.
 
-Every 2 seconds it hides while a full-screen app is in front, otherwise finds the taskbars, sits
-on each and lifts itself back above them. It only redraws when what it shows has changed.
-Clicking it opens the overlay.
+Every 2 seconds, and when a monitor comes or goes, it finds the taskbars showing, sits on each
+and lifts itself back above them. One hides with its taskbar (a full-screen video or game on
+that monitor, or auto-hide). It only redraws when what it shows has changed. Clicking any of
+them opens the overlay.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 from app.core.model import HudSettings, Idle, Lists, Task, step_line, working
 from app.counts import Count, CountsFile
 from app.ui import icons, theme
-from app.win32.taskbar import Tray, find_taskbars, full_screen_app, lift, light_taskbar
+from app.win32.taskbar import Tray, find_taskbars, lift, light_taskbar
 
 TICK_MS = 2000
 GAP = 8  # between the HUD and the tray, in Qt pixels
@@ -66,7 +68,7 @@ class Hud:
         self.timer.start(TICK_MS)
 
     def tick(self) -> None:
-        trays = () if full_screen_app() else find_taskbars()
+        trays = find_taskbars()
         while len(self.bars) < len(trays):
             self.bars.append(_Bar(self.settings, self.clicked))
         for bar in self.bars[len(trays) :]:
@@ -75,7 +77,7 @@ class Hud:
             active = _active_title(working(self.lists().active))
             counts, light = self.counts.read(), light_taskbar()
             for bar, tray in zip(self.bars, trays, strict=False):
-                bar.show_on(tray, active, counts, light)
+                bar.show_on(tray, active if tray.main else "", counts, light)
 
 
 class _Bar(QWidget):
