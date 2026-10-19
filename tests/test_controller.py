@@ -11,8 +11,27 @@ from app.store import Store
 NOW = datetime(2026, 10, 17, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
 
 
-def controller(folder: Path) -> Controller:
-    return Controller(Store(folder), CommandWords(), lambda: NOW)
+class Agents:
+    """herdr, as the controller sees it: who's running, and what each was sent."""
+
+    def __init__(self, *running: str) -> None:
+        self.up = set(running)
+        self.asked = 0  # how many times it was asked who's running
+        self.sent: list[tuple[str, str]] = []
+
+    def check(self, name: str) -> str:
+        self.asked += 1
+        return "" if name in self.up else f"{name} isn't running"
+
+    def send(self, name: str, text: str) -> str:
+        if name not in self.up:
+            return f"{name} isn't running"
+        self.sent.append((name, text))
+        return ""
+
+
+def controller(folder: Path, agents: Agents | None = None) -> Controller:
+    return Controller(Store(folder), CommandWords(), lambda: NOW, agents or Agents())
 
 
 def test_a_command_is_saved_then_shown_then_logged(tmp_path: Path) -> None:
@@ -36,12 +55,30 @@ def test_a_rejection_changes_nothing_and_keeps_the_text(tmp_path: Path) -> None:
     assert not (tmp_path / "tasks.md").exists()
 
 
-def test_a_line_for_the_assistant_is_cleared_and_does_nothing(tmp_path: Path) -> None:
-    glance = controller(tmp_path)
+def test_spaces_first_send_the_line_to_an_agent_and_nothing_else(tmp_path: Path) -> None:
+    agents = Agents("assistant", "chief")
+    glance = controller(tmp_path, agents)
     glance.open()
-    assert glance.run(" done") == View(Lists(), accepted=True)
-    assert glance.run("   ") == View(Lists(), accepted=True)
+    assert glance.run(" done") == View(Lists(), "sent to assistant", accepted=True)
+    assert glance.run("   ask backend for the API ").message == "sent to chief"
+    assert agents.sent == [("assistant", "done"), ("chief", "ask backend for the API")]
+    assert glance.run("   ") == View(Lists(), accepted=True)  # only spaces: nothing sent
     assert not (tmp_path / "tasks.md").exists()
+
+
+def test_an_agent_that_isnt_running_is_shown_in_red_and_keeps_the_line(tmp_path: Path) -> None:
+    agents = Agents("chief")
+    glance = controller(tmp_path, agents)
+    glance.open()
+    shown = glance.preview(" move deep work to 3pm")
+    assert (shown.note, shown.trouble) == ("assistant isn't running", True)
+    glance.preview(" move deep work to 3pm!")
+    assert agents.asked == 1  # herdr is asked once per open, not per key
+    assert glance.run(" move deep work") == View(Lists(), problem="assistant isn't running")
+    assert glance.preview("  hi").note == "chief"
+    agents.up.add("assistant")
+    glance.open()  # started since: the next open asks again
+    assert not glance.preview(" hi").trouble
 
 
 def test_a_line_that_means_something_else_by_enter_isnt_run(tmp_path: Path) -> None:
@@ -50,7 +87,7 @@ def test_a_line_that_means_something_else_by_enter_isnt_run(tmp_path: Path) -> N
     plan = f"# Today {NOW.date().isoformat()}\n- 09:00-10:00 deep\n- 21:00-22:00 deep\n"
     (tmp_path / "tasks.md").write_text(plan, encoding="utf-8")
     clock = [NOW.replace(hour=8, minute=59)]
-    glance = Controller(Store(tmp_path), CommandWords(), lambda: clock[0])
+    glance = Controller(Store(tmp_path), CommandWords(), lambda: clock[0], Agents())
     glance.open()
     assert glance.preview("review 9 for 1h").note == "replaces deep"
     clock[0] = NOW.replace(hour=9, minute=1)

@@ -9,8 +9,9 @@ after drawing, so a failed history write can't leave the window showing stale li
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time
+from typing import Protocol
 
 from app.core import blocks, today
 from app.core.commands import (
@@ -33,15 +34,30 @@ class View:
 
     lists: Lists
     message: str = ""
-    problem: str = ""  # why tasks.md can't be read; commands are refused until it's fixed
+    # Shown in red: why tasks.md can't be read (commands are refused until it's fixed), or why a
+    # line couldn't be sent to an agent
+    problem: str = ""
     accepted: bool = False  # the command ran, so the text box can be cleared
 
 
+class Agents(Protocol):
+    """The agents a line can be sent to: herdr's, in the app. Neither call raises: each returns
+    "" when all is well, else why not."""
+
+    def check(self, name: str) -> str: ...
+
+    def send(self, name: str, text: str) -> str: ...
+
+
 class Controller:
-    def __init__(self, store: Store, words: CommandWords, now: Callable[[], datetime]) -> None:
+    def __init__(
+        self, store: Store, words: CommandWords, now: Callable[[], datetime], agents: Agents
+    ) -> None:
         self.store = store
         self.words = words
         self.now = now
+        self.agents = agents
+        self.trouble: dict[str, str] = {}  # what's wrong with each agent, "" if nothing, this open
         self.lists = Lists()
         self.stamp = NO_FILE
         self.problem = ""
@@ -51,8 +67,9 @@ class Controller:
 
     def open(self) -> View:
         """Read tasks.md and events.log again: either may have changed since the window was
-        last shown."""
+        last shown. Whether the agents are running is checked again too, when next needed."""
         self.log = self.store.history()
+        self.trouble = {}
         match self.store.load():
             case Snapshot(lists=lists, stamp=stamp):
                 self.lists, self.stamp, self.problem = lists, stamp, ""
@@ -63,12 +80,23 @@ class Controller:
 
     def run(self, text: str) -> View:
         match parse_command(text, self.words):
-            case Ask():  # for the assistant, which isn't built yet: it's cleared, and that's all
-                return View(self.lists, problem=self.problem, accepted=True)
+            case Ask(agent=agent, text=asked):
+                return self._ask(agent, asked)
             case _ if not text.strip():
                 return View(self.lists, problem=self.problem)
             case command:
                 return self._apply(text, command)
+
+    def _ask(self, agent: str, text: str) -> View:
+        """Typed into the agent's pane. Only spaces send nothing, but clear the line like a sent
+        one. If it can't be sent, the line stays, to send again."""
+        if not text:
+            return View(self.lists, problem=self.problem, accepted=True)
+        why = self.agents.send(agent, text)
+        self.trouble[agent] = why
+        if why:
+            return View(self.lists, problem=why)
+        return View(self.lists, f"sent to {agent}", self.problem, accepted=True)
 
     def _apply(self, text: str, command: Command) -> View:
         if self.store.stamp() != self.stamp:
@@ -91,9 +119,19 @@ class Controller:
                 return View(lists, message, accepted=True)
 
     def preview(self, text: str) -> Preview:
-        """What the line being typed will do, worked out on each key press."""
-        self.previewed = (text, preview(text, self.words, self.lists, self.now()))
-        return self.previewed[1]
+        """What the line being typed will do, worked out on each key press. For an agent, the note
+        names it, or says what's wrong; herdr is only asked once per open."""
+        shown = preview(text, self.words, self.lists, self.now())
+        if shown.agent:
+            why = self._trouble(shown.agent)
+            shown = replace(shown, note=why or shown.agent, trouble=bool(why))
+        self.previewed = (text, shown)
+        return shown
+
+    def _trouble(self, agent: str) -> str:
+        if agent not in self.trouble:
+            self.trouble[agent] = self.agents.check(agent)
+        return self.trouble[agent]
 
     def _moved_on(self, text: str, now: datetime) -> bool:
         """Whether what was shown for this line has changed with the clock alone: at 08:59, `9`

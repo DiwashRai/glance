@@ -99,8 +99,9 @@ says so.
 ## Commands and keys
 
 Typed into the overlay's text box. A command word first decides. With none, a line ending in a
-time and a length is a block, and anything else is a new task. A line starting with a space goes
-to the agent. As I type, the words glance picked up are coloured, so I can see what it will do.
+time and a length is a block, and anything else is a new task. A line starting with one space goes
+to my assistant agent, two or more to my chief of staff (both in herdr, typed into their panes).
+As I type, the words glance picked up are coloured, so I can see what it will do.
 
 | Command | Does |
 |---|---|
@@ -347,6 +348,11 @@ lists on my phone.
 - Should check-ins pause while the PC is locked or I'm away?
 
 ## Appendix: how glance reaches the agent
+
+**Built so far:** only herdr, and only as if I'd typed into the agent's pane
+(`herdr agent prompt <name> "<text>"`): one space for `assistant`, two for `chief`. There's no
+fallback, request ID or reply in glance yet; the answer stays in the agent's pane. The plan below
+is where it may go.
 
 Two ways, chosen in settings, behind one small interface (like providers today):
 
