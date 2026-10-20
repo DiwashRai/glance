@@ -19,10 +19,8 @@
 # unblock = ["unblock"]
 # remove = ["rm"]
 
-# [glance.hud]              # the counts on the taskbar, just left of the tray
-# look = "native"           # "native": drawn onto the taskbar; "box": a dark box
+# [glance.hud]              # the counts on the taskbar (theme and look: the tray menu)
 # labels = "icons"          # "icons": each entry's icon below; "text": its label
-# show_active = true        # the active task, before the counts
 
 # Where the counts come from. update_status.py reads these, and the HUD shows what it writes
 # to [updater].output_path.

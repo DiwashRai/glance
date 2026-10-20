@@ -13,9 +13,11 @@ Instructions are for Windows at the moment.
 
 Glance has two parts:
 
-- **The HUD:** one row on the taskbar, just left of the tray. The active task, then each count
-  (unread mail, reviews, tickets), coloured by how urgent it is. A green ✓ when all is clear.
-  Click it to open the overlay.
+- **The HUD:** the counts on the taskbar, just left of the tray (unread mail, reviews, tickets):
+  in a box, or tray-native with each number in a badge on its icon. A number turns orange when
+  it's high and red when very high; a count of 0 shows its icon alone. A yellow dot goes first
+  while a message waits for you. Click it to open the overlay; right-click it (or the tray icon)
+  to pick the look, and a light or dark theme or the system default.
 - **The overlay:** press Ctrl+Space anywhere to open it, type a command, Enter to run it, Esc to
   hide it. Hold Ctrl+Space instead to peek: it shows while you hold, without taking the focus,
   and hides when you let go. Glance lives in the tray; right-click the orange dot to quit.
@@ -49,8 +51,8 @@ again). Replies are in the agent's pane. The names are `agents` in `[glance]`.
 `glance '<line>'` runs a line as if you'd typed it into the overlay: `glance 'quick reply to Sam'`
 (single quotes, so PowerShell leaves `$` alone).
 It's how your agents change your lists (`glance --skill` tells them how), so their changes are
-checked and logged like yours. The HUD shows a change within 2 seconds, and the overlay when it
-next opens. Install it once, from the glance folder: `uv tool install -e .`
+checked and logged like yours. The overlay shows the change when it next opens. Install it once,
+from the glance folder: `uv tool install -e .`
 
 Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
 what happened is logged to `events.log` next to it.

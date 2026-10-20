@@ -50,8 +50,11 @@ class Herdr:
                 return "herdr didn't answer"
 
     def send(self, name: str, text: str) -> str:
-        """Types `text` into the agent's pane. "" when it's sent, else why not."""
-        match self._run(self.send_s, "agent", "prompt", name, text):
+        """Types `text` into the agent's pane, marked as sent from glance, so the agent can tell
+        it from what I type in its pane. A slash command (/compact) goes as it is, or it wouldn't
+        run. "" when it's sent, else why not."""
+        marked = text if text.startswith("/") else f"[via glance] {text}"
+        match self._run(self.send_s, "agent", "prompt", name, marked):
             case _Answer(code=0):
                 return ""
             case _Answer(err=err, code=code):

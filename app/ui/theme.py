@@ -25,20 +25,22 @@ KEY = "#b5b5b8"
 SELECTION = "#3a2810"
 ORANGE = "#f39c12"
 YELLOW = "#f4d03f"
+YELLOW_GLOW = "#40f4d03f"  # the yellow, faint: a ring round the HUD's dot
 BLUE = "#5dade2"
 RED = "#e74c3c"
 GREY_RING = "#a0a0a3"
-GREEN = "#58d68d"  # all clear
 BACKDROP_DIM = 0.6  # how dark the screen behind the overlay goes, 0 to 1
 
-# The HUD on the taskbar (canvas boards W1 to W9)
-HUD_TEXT_LIGHT = "#1b1b1d"  # text on a light taskbar
-# Each count is a chip tinted in its source's colour, by the icon it names; others are blue
-HUD_SOURCES = {"todo": "#e8604c", "mail": "#4c9aff", "jira": "#36b3d9", "pr": "#a47cf3"}
-HUD_TINT = {False: 55, True: 60}  # how strong the tint is, out of 255, on a dark or light bar
-HUD_HIGH = "#b45309"  # a chip at level 2 is solid amber, dark enough for white on it
-HUD_ALERT = "#dc2626"  # and at level 3, or for a failed provider, solid red
-HUD_BOX = f"background: {CARD}; border: 1px solid {BORDER}; border-radius: 8px;"
+# The HUD on the taskbar in a light theme (canvas board W9, E). The dark one (C) is the overlay's
+HUD_LIGHT_BOX = "#ffffff"
+HUD_LIGHT_EDGE = "#d4d4d8"
+HUD_LIGHT_ICON = "#4a4a4f"
+HUD_LIGHT_TEXT = "#1b1b1d"
+HUD_LIGHT_ORANGE = "#e8700a"
+HUD_LIGHT_RED = "#c0392b"
+BADGE_RED = HUD_LIGHT_RED  # a tray-native badge, on either taskbar: deep enough for white on it
+HUD_LIGHT_YELLOW = "#f1c40f"  # the dot
+HUD_LIGHT_RING = "#8a6d00"  # dark gold round the dot, so it shows on white
 
 FONTS = ["JetBrains Mono", "JetBrainsMono NF", "Cascadia Mono", "Consolas"]
 

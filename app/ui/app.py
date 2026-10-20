@@ -41,7 +41,9 @@ def run(app: QApplication, home: Path, argv: list[str], agents: Agents) -> int:
     hook.log_to(settings.data_folder / "glance.log")
 
     controller = Controller(Store(settings.data_folder), settings.words, _now, agents)
-    controller.open()  # so the HUD shows the active task before the overlay is first opened
+    # Read now, so an error before the overlay first opens (a bad counts file, say) is shown
+    # over the real lists and today's history, not empty ones
+    controller.open()
     shell = Shell(app, controller, settings.hud, settings.counts_file)
     shell.start()
     # Only now do errors go to the window: one during start-up (Ctrl+Space taken, say) must

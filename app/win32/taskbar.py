@@ -68,8 +68,7 @@ class Tray:
     left: int
     top: int
     height: int
-    width: int  # the whole taskbar's, to keep the HUD a modest share of it
-    main: bool  # the one with the tray, where the HUD has the most room
+    main: bool  # the one with the tray
     showing: bool  # on screen and on top: see _showing
 
 
@@ -93,7 +92,6 @@ def find_taskbars() -> tuple[Tray, ...]:
             left=left,
             top=bar.top,
             height=bar.bottom - bar.top,
-            width=bar.right - bar.left,
             main=window == main,
             showing=_showing(window, bar),
         )

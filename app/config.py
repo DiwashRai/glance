@@ -59,9 +59,7 @@ class _Commands(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
 
 
 class _Hud(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
-    look: Literal["native", "box"] = "native"
     labels: Literal["icons", "text"] = "icons"
-    show_active: bool = True
 
 
 class _Glance(msgspec.Struct, frozen=True, forbid_unknown_fields=True):

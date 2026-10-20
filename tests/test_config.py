@@ -34,13 +34,12 @@ data_folder = "data"
 park = ["Park", "Later"]
 
 [glance.hud]
-look = "box"
-show_active = false
+labels = "text"
 """
     settings = load_settings(write(tmp_path, text))
     assert settings.data_folder == tmp_path / "data"
     assert settings.counts_file == tmp_path / "data" / "status.json"
-    assert settings.hud == HudSettings(look="box", show_active=False)
+    assert settings.hud == HudSettings(labels="text")
     assert settings.words.park == ("park", "later")
     assert settings.words.new == CommandWords().new
 
@@ -49,7 +48,7 @@ show_active = false
     ("text", "error"),
     [
         ('[glance.commands]\npark = "park"\n', "$.glance.commands.park"),
-        ('[glance.hud]\nlook = "fancy"\n', "$.glance.hud.look"),
+        ('[glance.hud]\nlabels = "emoji"\n', "$.glance.hud.labels"),
         ('[glance.commands]\npark = ["two words"]\n', "$.glance.commands.park"),
         ('[glance.commands]\nnew = ["x\\n"]\n', "$.glance.commands.new"),
         ("[glance]\ndata_dir = 'x'\n", "data_dir"),

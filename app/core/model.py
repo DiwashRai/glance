@@ -79,7 +79,7 @@ def where(task: Task) -> Where:
 
 
 def step_line(task: Task) -> str:
-    """Where the task is up to, as the Active card, the HUD and Parked show it: "rerun CI · 2/4",
+    """Where the task is up to, as the Active card and Parked show it: "rerun CI · 2/4",
     "back to skipped: rerun CI", "only skipped steps left", "all 4 steps done". "" with no
     steps."""
     count = len(task.steps)
@@ -250,11 +250,9 @@ class Message:
 
 @dataclass(frozen=True)
 class HudSettings:
-    """How the HUD on the taskbar looks."""
+    """How the HUD on the taskbar looks. Its theme is picked from the tray menu."""
 
-    look: Literal["native", "box"] = "native"  # native: drawn straight onto the taskbar
     labels: Literal["icons", "text"] = "icons"
-    show_active: bool = True
 
 
 @dataclass(frozen=True)
