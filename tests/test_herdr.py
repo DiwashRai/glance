@@ -50,6 +50,16 @@ def test_herdrs_answer_becomes_a_sentence_never_an_error(
     assert herdr.check("chief") == said
 
 
+def test_a_line_is_marked_as_from_glance_but_a_slash_command_isnt(tmp_path: Path) -> None:
+    script = tmp_path / "herdr.py"
+    typed = tmp_path / "typed.txt"
+    script.write_text(f"import sys\nopen({str(typed)!r}, 'a').write(sys.argv[-1] + '\\n')")
+    herdr = Herdr((sys.executable, str(script)), check_s=10, send_s=10)
+    assert herdr.send("chief", "move deep work") == ""
+    assert herdr.send("chief", "/compact") == ""
+    assert typed.read_text().splitlines() == ["[via glance] move deep work", "/compact"]
+
+
 def test_a_herdr_that_cant_be_run_is_said_so(tmp_path: Path) -> None:
     """Gone since start-up, or half-way through an update."""
     broken = tmp_path / "broken.exe"

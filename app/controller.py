@@ -1,10 +1,10 @@
 """Runs what I type against the lists on disk. Plain Python, no Qt, so it's tested like core.
 
 The window calls `open()` each time it's shown, `preview()` as I type, `run()` on Enter, and draws
-the `View` it gets back. `glance` on the command line does the same for one line. The HUD asks
-for `saved()`. A change is saved to tasks.md first and only then kept in memory, so
-what's shown never gets ahead of what's saved. The window writes the history (`write_history()`)
-after drawing, so a failed history write can't leave the window showing stale lists.
+the `View` it gets back. `glance` on the command line does the same for one line. A change is
+saved to tasks.md first and only then kept in memory, so what's shown never gets ahead of what's
+saved. The window writes the history (`write_history()`) after drawing, so a failed history
+write can't leave the window showing stale lists.
 
 Messages for me wait in `inbox`, oldest first, read again on each open and whenever the app sees
 the inbox change. The top one is cleared by Enter on an empty line, or by answering whoever sent
@@ -70,7 +70,6 @@ class Controller:
         self.history: tuple[Event, ...] = ()  # the last change's, until they're written
         self.log: today.Log = today.NOTHING_YET  # events.log as last read, plus what's since
         self.previewed = ("", Preview())  # the line last previewed, and what it showed
-        self.seen = (NO_FILE, Lists())  # tasks.md as the HUD last read it
         self.inbox: tuple[Message, ...] = ()  # messages for me, oldest first, as last read
 
     def open(self) -> View:
@@ -86,21 +85,6 @@ class Controller:
                 self.stamp = stamp
                 self.problem = f"{message}. Commands wait until it's fixed."
         return View(self.lists, problem=self.problem)
-
-    def saved(self) -> Lists:
-        """The lists as tasks.md has them, for the HUD, read again only when it changes: an agent
-        may have changed them with `glance` on the command line. A file that can't be read keeps
-        the last lists that could. This is apart from what a typed line runs against, so a line
-        typed against what the overlay shows is still checked against the file first."""
-        stamp, lists = self.seen
-        if self.store.stamp() == stamp:
-            return lists
-        match self.store.load():
-            case Snapshot(lists=read, stamp=stamp):
-                self.seen = (stamp, read)
-            case Unreadable(stamp=stamp):
-                self.seen = (stamp, lists)
-        return self.seen[1]
 
     def read_inbox(self) -> None:
         self.inbox = self.store.inbox()

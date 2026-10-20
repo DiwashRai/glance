@@ -10,7 +10,7 @@ Simplify aggressively. If a feature isn't clearly helping one of the problems be
 
 | Word | Meaning |
 |---|---|
-| HUD | The thin bar that is always on screen, on the taskbar by the tray. Shows the counts, and the active task unless I turn it off. |
+| HUD | The row that is always on screen, on the taskbar by the tray. Shows the counts, and a yellow dot when a message is waiting. A box or tray-native, light, dark or the system's: picked from its right-click menu. |
 | Overlay | The bigger panel that opens with Ctrl+Space: a text box in the middle, lists around it. |
 | Drop card | A small card that springs out of the HUD to nudge me, with one-key answers. |
 | Agent | The AI assistant: Copilot CLI at work, Claude CLI at home. |
@@ -35,7 +35,7 @@ Simplify aggressively. If a feature isn't clearly helping one of the problems be
 
 ## Principles
 
-- **Works when forgotten.** The HUD is always there and needs no effort. The active task can live on it.
+- **Works when forgotten.** The HUD is always there and needs no effort.
 - **Assistant, not boss.** The agent gives its opinion and suggests. It never overrules me.
 - **Safe to put things away.** Anything parked is guaranteed to come back. Nothing silently
   disappears.
@@ -55,7 +55,7 @@ The priority side is read top to bottom: "can I do this right now? No? Next one.
 
 | List | Limit | What it holds |
 |---|---|---|
-| Active | 1 | What I'm working on right now. Shown on the HUD unless I turn that off. |
+| Active | 1 | What I'm working on right now. |
 | Focus | 1-2 | What the work is for, kept in view as a reminder: something I need to deliver ("fix the vulnerabilities"), or something I'm chipping away at over time ("migrate the build", in its own worktree). Never made active. Two at most, so I chip away at one or two things instead of carrying five that never get done. Still loose: it may become a queue later. |
 | Parked | any | Tasks I've put away: paused or blocked. |
 
@@ -82,8 +82,7 @@ says so.
 
 - A task can have steps: an ordered checklist, one level only (no steps inside steps).
 - One step is the current step. The Active card shows it with progress (`compare node versions ·
-  2/4`); the HUD shows the step and its progress in place of the title, since it has little room. A parked task with no note shows
-  its step instead.
+  2/4`). A parked task with no note shows its step instead.
 - `done` ticks off the current step and moves to the next. After the last step it says "all 4
   steps done · done again to finish", so finishing takes a second `done`.
 - `skip` (or `>`) moves past a blocked step and leaves it in the list. Once the open steps run out,
@@ -184,7 +183,8 @@ Agents (or any script) leave me a message with `glance --from chief '<a sentence
 characters at most, with anything longer in a file it names. It doesn't depend on herdr or any
 other agent system.
 
-- A yellow chip on the HUD says who the oldest is from, and how many more: `● chief +2`.
+- A yellow dot on the HUD, on the side towards the middle of the screen. Its tooltip says who
+  the oldest is from, and how many more.
 - The overlay shows the oldest in a yellow-edged card under the middle one, and grows to fit it.
   Oldest first, so one that comes in while I'm reading goes to the back.
 - ↵ on an empty line clears it and shows the next. Answering its sender with the space prefix

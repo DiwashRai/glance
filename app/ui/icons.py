@@ -23,28 +23,28 @@ FLAME = (
 
 # The HUD's counts (canvas board W9). A collector entry picks one by name (`icon = "mail"`); any
 # other icon text is shown as it is, such as a Nerd Font glyph.
-HUD = {
+HUD = {  # a thicker line than the overlay's (2.6, not 2), to read on the taskbar
     "todo": (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-        ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        ' stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">'
         '<polyline points="9 11 12 14 22 4"/>'
         '<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
     ),
     "mail": (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-        ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        ' stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>'
         '<polyline points="22,6 12,13 2,6"/></svg>'
     ),
     "jira": (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-        ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        ' stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0'
         ' 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'
     ),
     "pr": (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-        ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        ' stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">'
         '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/>'
         '<path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>'
     ),
