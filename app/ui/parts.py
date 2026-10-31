@@ -246,8 +246,7 @@ class ListCard(QFrame):
 
 
 def parked_card() -> ListCard:
-    """The queue: numbered the way `switch` counts, parked tasks on top and new ones at the
-    bottom, with each task's note."""
+    """Queue rows, parked first and new last."""
     corner = "parked on top · new at the bottom"
     card = ListCard("Queue", corner, "nothing queued", "s p<n> to start")
     card.setFixedWidth(340)
@@ -307,8 +306,7 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
 
 
 def _marker(reason: LeftOff | Waiting | Queued) -> QPixmap:
-    """A solid grey dot for a new task, a white ring for one left off, a yellow ring for one
-    waiting."""
+    """Grey dot for new, white ring for left off, yellow ring for waiting."""
     pixmap = icons.blank(12)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)

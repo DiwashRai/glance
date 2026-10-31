@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from app.controller import Controller, View
-from app.core.model import CommandWords, Idle, Lists, Task
+from app.core.model import CommandWords, Idle, Lists, ParkedTask, Queued, Task
 from app.core.today import Span
 from app.store import Store
 
@@ -35,19 +35,17 @@ def controller(folder: Path, agents: Agents | None = None) -> Controller:
 
 
 def test_a_command_is_saved_then_shown_then_logged(tmp_path: Path) -> None:
+    Store(tmp_path).save(Lists(parked=(ParkedTask(Task("fix the build"), Queued()),)))
     glance = controller(tmp_path)
     glance.open()
-    glance.run("new fix the build")
-    glance.write_history()
     view = glance.run("s p1")
     said = "switched to fix the build"
     assert view == View(Lists(Task("fix the build"), ()), said, accepted=True)
     assert controller(tmp_path).open().lists == view.lists  # saved: a fresh start sees it
-    log = tmp_path / "events.log"
-    assert log.read_text(encoding="utf-8").count("\n") == 1  # history is written after drawing
+    assert not (tmp_path / "events.log").exists()  # history is written after drawing
     assert glance.day().spans == (Span("fix the build", NOW, NOW, going=True),)  # already
     glance.write_history()
-    assert log.read_text(encoding="utf-8").count("\n") == 2
+    assert (tmp_path / "events.log").read_text(encoding="utf-8").count("\n") == 1
     glance.open()  # read back from events.log, not counted twice
     assert glance.day().spans == (Span("fix the build", NOW, NOW, going=True),)
 

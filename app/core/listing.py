@@ -58,10 +58,8 @@ def _active(active: Task | FromQuick | Idle) -> tuple[str, ...]:
 
 
 def _parked(item: ParkedTask) -> str:
-    """A task added with new and never started says so, as the card's marker does."""
     queued = "queued" if item.reason == Queued() else ""
-    parts = (shown(item.task), queued, parked_note(item))
-    return " · ".join(part for part in parts if part)
+    return " · ".join(part for part in (shown(item.task), queued, parked_note(item)) if part)
 
 
 def _numbered(rows: Iterable[str], prefix: str = "") -> tuple[str, ...]:

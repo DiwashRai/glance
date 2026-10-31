@@ -287,7 +287,6 @@ def _and(said: str) -> str:
 
 
 def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
-    """At the bottom of the queue, leaving Active alone: `s p<n>` starts it."""
     task = sized(title)
     if not task.title:
         return Rejected("a task needs a title")
