@@ -24,11 +24,11 @@ Glance has two parts:
 
 | Command | Does |
 |---|---|
-| `<title>` (or `new <title>`, `+`) | Start a task. Anything active is parked. Use `new` for a title that starts with a command word (`new wait for Sam`) |
+| `<title>` (or `new <title>`, `+`) | Add a task to the bottom of the queue (the Parked list); Active is left alone. Use `new` for a title that starts with a command word (`new wait for Sam`) |
 | `<what> 2pm for 1h` | Plan a block of time today: `deep work 9 for 2h` (the next 9 o'clock), `call for 30m 14:30`. Times: `2pm`, `14:30`, `noon`, `evening`. Lengths: `30m`, `90m`, `1h30m`. `!` at the end: it must happen. A block cuts back any it lands on, whatever their names. A line that doesn't end exactly like this is a task |
 | `park <note>` (or `pause`, `shelve`, `defer`) | Park the active task, with an optional "left off" note |
 | `wait <what>` | Park the active task as waiting on something |
-| `switch <title or number>` (or `s`) | Make a parked task active, or a Quick item (`s q2`) |
+| `switch <title or row>` (or `s`) | Make a queued task active (`s p2`), or a Quick item (`s q2`). The active one is parked on top |
 | `done` (or `d`) | Tick off the current step, or finish the task if it has none. `done q2` ticks off a Quick item |
 | `step <text>` | Add a step to the active task |
 | `skip` (or `>`) | Skip the current step; skipped steps come back round once |

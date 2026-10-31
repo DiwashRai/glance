@@ -1,9 +1,10 @@
 """Glance's lists and what happens to them, as plain frozen types.
 
-Bad states can't be written down: Active is a task or idle, and a parked task is either left off
-(with an optional "where I left off" note) or waiting on something. Focus is one or two things
-the work is for, kept in view as a reminder: never made active, only added and removed. Quick
-holds small next actions, smallest first. The plan is today's blocks of set-aside time.
+Bad states can't be written down: Active is a task or idle, and a parked task is queued (added
+and never started), left off (with an optional "where I left off" note) or waiting on something.
+Focus is one or two things the work is for, kept in view as a reminder: never made active, only
+added and removed. Quick holds small next actions, smallest first. The plan is today's blocks of
+set-aside time.
 """
 
 from __future__ import annotations
@@ -156,9 +157,14 @@ class Waiting:
 
 
 @dataclass(frozen=True)
+class Queued:
+    """Added with `new` and never started yet."""
+
+
+@dataclass(frozen=True)
 class ParkedTask:
     task: Task
-    reason: LeftOff | Waiting
+    reason: LeftOff | Waiting | Queued
 
 
 def parked_note(parked: ParkedTask) -> str:
@@ -167,7 +173,7 @@ def parked_note(parked: ParkedTask) -> str:
     match parked.reason:
         case Waiting(on=on):
             return f"waiting on {on}"
-        case LeftOff(note=""):
+        case LeftOff(note="") | Queued():
             return step_line(parked.task)
         case LeftOff(note=note):
             return f"left off: {note}"
@@ -197,7 +203,7 @@ class NoPlan:
 @dataclass(frozen=True)
 class Lists:
     active: Task | FromQuick | Idle = Idle()
-    parked: tuple[ParkedTask, ...] = ()  # most recently touched first
+    parked: tuple[ParkedTask, ...] = ()  # parking puts a task on top, new tasks go last
     focus: tuple[str, ...] = ()  # at most FOCUS_SLOTS, oldest first
     quick: tuple[Task, ...] = ()  # smallest first
     plan: Plan | NoPlan = NoPlan()

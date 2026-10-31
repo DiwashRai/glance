@@ -34,6 +34,7 @@ from app.core.model import (
     LeftOff,
     Lists,
     ParkedTask,
+    Queued,
     Step,
     Task,
     Waiting,
@@ -98,7 +99,7 @@ def test_parses_the_first_word(text: str, command: Command | Ask) -> None:
 @pytest.mark.parametrize("text", ["new a\n- b", f"new a{chr(0x2028)}- b"])
 def test_line_breaks_become_one_space_so_tasks_md_reads_back(text: str) -> None:
     result = applied(Lists(), text)
-    assert result.lists.active == Task("a - b")
+    assert result.lists.parked == (ParkedTask(Task("a - b"), Queued()),)
     assert parse(render(result.lists)) == result.lists
 
 
@@ -117,25 +118,34 @@ def test_a_reply_offered_with_spaces_goes_to_that_agent() -> None:
     assert spaces_for("backup-script", WORDS) == 0  # not an agent: no reply offered
 
 
+NEW = ParkedTask(Task("fix the build"), Queued())
+
+
 @pytest.mark.parametrize(
-    ("lists", "parked", "message"),
+    ("lists", "message"),
     [
-        (Lists(), (), "started fix the build"),
-        (
-            DAY,
-            (ParkedTask(ACTIVE, LeftOff()), WAITING, LEFT),
-            f"started fix the build · parked {ACTIVE.title}",
-        ),
+        (Lists(), "added fix the build to the queue as p1 · s p1 to start it"),
+        (DAY, "added fix the build to the queue as p3 · s p3 to start it"),
+        (IDLE_DAY, "added fix the build to the queue as p3 · s p3 to start it"),
     ],
 )
-def test_new_starts_a_task_and_parks_the_active_one(
-    lists: Lists, parked: tuple[ParkedTask, ...], message: str
+def test_new_goes_to_the_bottom_of_the_queue_and_leaves_active_alone(
+    lists: Lists, message: str
 ) -> None:
     result = applied(lists, "new fix the build")
-    assert result.lists == Lists(Task("fix the build"), parked)
+    assert result.lists == replace(lists, parked=(*lists.parked, NEW))
     assert applied(lists, "fix  the build").lists == result.lists  # no command word: new
-    assert result.events[-1] == Event(NOW, "started", "fix the build")
+    assert result.events == (Event(NOW, "added", "fix the build", "to the queue"),)
     assert result.message == message
+    assert parse(render(result.lists)) == result.lists  # still queued once saved
+
+
+def test_a_queued_task_starts_by_its_row_and_comes_back_on_top_once_parked() -> None:
+    queued = applied(DAY, "new fix the build").lists
+    started = applied(queued, "s p3")
+    assert started.lists == Lists(NEW.task, (ParkedTask(ACTIVE, LeftOff()), WAITING, LEFT))
+    assert started.message == f"switched to fix the build · parked {ACTIVE.title}"
+    assert applied(started.lists, "park").lists.parked[0] == ParkedTask(NEW.task, LeftOff())
 
 
 @pytest.mark.parametrize(
@@ -260,6 +270,8 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "done 1129", "done ticks the current step; done q<number> ticks off a quick item"),
         (DAY, "done q1", "there's no q1 in quick"),
         (DAY, "s q1", "there's no q1 in quick"),
+        (DAY, "s p3", "there's no p3 in the queue"),
+        (DAY, "s P0", "there's no p0 in the queue"),
         (DAY, "quick", "quick what? for example: quick merge 1129 ~3m"),
         (DAY, "focus", "focus on what?"),
         (FOCUSED, "focus a third", "focus is full: unfocus one first, by number or name"),
@@ -333,7 +345,7 @@ def test_a_quick_item_switched_to_goes_back_to_quick_unless_it_gains_a_note() ->
     assert back.message == "put reply to Sam back in quick"
     noted = applied(picked.lists, "wait Sam's answer")
     assert noted.lists.parked[0] == ParkedTask(Task("reply to Sam"), Waiting("Sam's answer"))
-    assert applied(picked.lists, "new x").message == "started x · put reply to Sam back in quick"
+    assert applied(picked.lists, "new x").lists.active == FromQuick(REPLY)  # new leaves it
 
 
 ROADMAP = Task("review Q2 roadmap", 3)
@@ -349,6 +361,8 @@ ROADMAP = Task("review Q2 roadmap", 3)
             "s Q2",
             FromQuick(REPLY),
         ),
+        # p2 is always Parked row 2, even when another title has "p2" in it
+        (Lists(parked=(ParkedTask(Task("ship p2"), LeftOff()), LEFT)), "s p2", LEFT.task),
         # a number only looks at Parked, whose rows are numbered
         (Lists(parked=(LEFT, WAITING), quick=(Task("merge 2"),)), "s 2", WAITING.task),
     ],

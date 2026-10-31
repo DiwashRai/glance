@@ -14,6 +14,8 @@
   waiting on: review
 - Tidy logging config
   left off: half done on chore/logging
+- Bump deps
+  queued
 
 # Quick
 - merge 1129 ~3m
@@ -44,6 +46,7 @@ from app.core.model import (
     ParkedTask,
     Plan,
     Problem,
+    Queued,
     Step,
     StepState,
     Task,
@@ -57,6 +60,7 @@ HEADINGS = {"# Active": "active", "# Focus": "focus", "# Parked": "parked", "# Q
 TODAY = "# Today"  # with its date: # Today 2026-10-18
 WAITING_ON = "waiting on:"
 LEFT_OFF = "left off:"
+QUEUED = "queued"  # under a task added with new and never started
 HOME_QUICK = "home: quick"  # under the active task: it came from Quick, and goes back there
 PLAIN = {"focus": "a focus", "quick": "a quick item", "today": "a block"}  # no notes or steps
 STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
@@ -94,10 +98,12 @@ def _step_lines(task: Task) -> list[str]:
     return [f"  - [{BOXES[step.state]}] {step.text}" for step in task.steps]
 
 
-def _note_lines(reason: LeftOff | Waiting) -> list[str]:
+def _note_lines(reason: LeftOff | Waiting | Queued) -> list[str]:
     match reason:
         case Waiting(on=on):
             return [f"  {WAITING_ON} {on}"]
+        case Queued():
+            return [f"  {QUEUED}"]
         case LeftOff(note=""):
             return []
         case LeftOff(note=note):
@@ -240,7 +246,7 @@ class _Reader:
         match _reason(text):
             case _BadNote(message=message):
                 return message
-            case LeftOff() | Waiting() as reason:
+            case LeftOff() | Waiting() | Queued() as reason:
                 self.parked[-1] = ParkedTask(self.parked[-1].task, reason)
                 self.noted = True
                 return ""
@@ -290,11 +296,13 @@ class _BadNote:
     message: str
 
 
-def _reason(text: str) -> LeftOff | Waiting | _BadNote:
+def _reason(text: str) -> LeftOff | Waiting | Queued | _BadNote:
     lowered = text.lower()
+    if lowered == QUEUED:
+        return Queued()
     if lowered.startswith(WAITING_ON):
         on = text[len(WAITING_ON) :].strip()
         return Waiting(on) if on else _BadNote("waiting on what?")
     if lowered.startswith(LEFT_OFF):
         return LeftOff(text[len(LEFT_OFF) :].strip())
-    return _BadNote(f"a note starts with '{WAITING_ON}' or '{LEFT_OFF}'")
+    return _BadNote(f"a note starts with '{WAITING_ON}' or '{LEFT_OFF}', or is '{QUEUED}'")

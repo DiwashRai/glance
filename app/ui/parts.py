@@ -45,6 +45,7 @@ from app.core.model import (
     LeftOff,
     Message,
     ParkedTask,
+    Queued,
     Task,
     Waiting,
     parked_note,
@@ -177,7 +178,7 @@ class FocusCard(QFrame):
 
 class ListCard(QFrame):
     """A titled list that shows as many rows as fit in the height its column gives it, then
-    "+N more". Parked and Quick are both one."""
+    "+N more". The queue and Quick are both one."""
 
     def __init__(self, name: str, corner: str, empty: str, more: str) -> None:
         super().__init__()
@@ -245,8 +246,10 @@ class ListCard(QFrame):
 
 
 def parked_card() -> ListCard:
-    """Numbered the way `switch` counts, most recent first, with each task's note."""
-    card = ListCard("Parked", "recent first", "nothing parked", "s <number> to switch")
+    """The queue: numbered the way `switch` counts, parked tasks on top and new ones at the
+    bottom, with each task's note."""
+    corner = "parked on top · new at the bottom"
+    card = ListCard("Queue", corner, "nothing queued", "s p<n> to start")
     card.setFixedWidth(340)
     return card
 
@@ -303,19 +306,23 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
     return row
 
 
-def _marker(reason: LeftOff | Waiting) -> QPixmap:
-    """A yellow ring for waiting, a dashed grey ring for left off."""
-    match reason:
-        case Waiting():
-            pen = QPen(QColor(theme.YELLOW), 2)
-        case LeftOff():
-            pen = QPen(QColor(theme.GREY_RING), 1.5)
-            pen.setDashPattern([2, 2])
+def _marker(reason: LeftOff | Waiting | Queued) -> QPixmap:
+    """A solid grey dot for a new task, a white ring for one left off, a yellow ring for one
+    waiting."""
     pixmap = icons.blank(12)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setPen(pen)
-    painter.drawEllipse(2, 2, 8, 8)
+    match reason:
+        case Queued():
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(theme.DIM))
+            painter.drawEllipse(1, 1, 10, 10)
+        case LeftOff():
+            painter.setPen(QPen(QColor(theme.TEXT), 2))
+            painter.drawEllipse(2, 2, 8, 8)
+        case Waiting():
+            painter.setPen(QPen(QColor(theme.YELLOW), 2))
+            painter.drawEllipse(2, 2, 8, 8)
     painter.end()
     return pixmap
 

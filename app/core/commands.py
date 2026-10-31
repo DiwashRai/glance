@@ -25,6 +25,7 @@ from app.core.model import (
     OnStep,
     ParkedTask,
     Plan,
+    Queued,
     Task,
     Waiting,
     shown,
@@ -286,13 +287,14 @@ def _and(said: str) -> str:
 
 
 def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
+    """At the bottom of the queue, leaving Active alone: `s p<n>` starts it."""
     task = sized(title)
     if not task.title:
         return Rejected("a task needs a title")
-    aside = _set_aside(lists, LeftOff(), now)
-    events = (*aside.events, Event(now, "started", task.title))
-    said = f"started {shown(task)}{_and(aside.message)}"
-    return Applied(replace(aside.lists, active=task), events, said)
+    queued = replace(lists, parked=(*lists.parked, ParkedTask(task, Queued())))
+    row = f"p{len(queued.parked)}"
+    said = f"added {shown(task)} to the queue as {row} · s {row} to start it"
+    return Applied(queued, (Event(now, "added", task.title, "to the queue"),), said)
 
 
 def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | Rejected:
@@ -428,6 +430,7 @@ def _quick(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
 
 
 QUICK_ROW = re.compile(r"[qQ][0-9]+")  # a Quick row as the card labels it: q1, q2…
+PARKED_ROW = re.compile(r"[pP][0-9]+")  # a queue row, as rm names it: p1, p2…
 CARD_ROW = re.compile(r"([fpqFPQ])([0-9]+)")  # for rm: f1 (focus), p1 (parked), q1 (quick)
 
 
@@ -503,9 +506,11 @@ def _switch(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
 
 
 def _switch_row(lists: Lists, query: str) -> _Picked | Rejected:
-    """One index across Parked, then Quick. `q2` is always Quick's row 2. A number only looks at
-    Parked, whose rows are numbered. Other text searches both."""
+    """One index across Parked, then Quick. `p2` and `q2` are always row 2 of their card. A
+    number only looks at Parked, whose rows are numbered. Other text searches both."""
     parked = _numbered(item.task.title for item in lists.parked)
+    if PARKED_ROW.fullmatch(query):
+        return _row(query[1:], len(parked), f"there's no {query.lower()} in the queue")
     if QUICK_ROW.fullmatch(query):
         match _quick_row(query, lists.quick):
             case _Picked(index=index):
@@ -537,9 +542,9 @@ def _reminder(chosen: ParkedTask) -> str:
     match chosen.reason, where(task):
         case Waiting(on=on), _:
             return f" · was waiting on {on}"
-        case LeftOff(note=""), OnStep():
+        case LeftOff(note="") | Queued(), OnStep():
             return f" · on {step_line(task)}"
-        case LeftOff(note=""), _:
+        case LeftOff(note="") | Queued(), _:
             return _and(step_line(task))  # "" with no steps
         case LeftOff(note=note), _:
             return f" · left off: {note}"

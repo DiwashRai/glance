@@ -28,14 +28,21 @@ def test_a_line_runs_as_if_typed_then_is_logged(
     assert glance(config, "fix", "the", "build") == 0  # the words, quoted or not
     assert glance_cli.run(["quick reply to Sam", "--config", str(config)], lambda: NOW) == 0
     assert glance(config, "--", "-1 on the RFC") == 0  # a line starting with -
-    said = "started fix the build\nadded reply to Sam to quick\nstarted -1 on the RFC"
-    assert capsys.readouterr().out == f"{said} · parked fix the build\n"
+    assert glance(config, "s", "p2") == 0
+    said = (
+        "added fix the build to the queue as p1 · s p1 to start it\n"
+        "added reply to Sam to quick\n"
+        "added -1 on the RFC to the queue as p2 · s p2 to start it\n"
+        "switched to -1 on the RFC\n"
+    )
+    assert capsys.readouterr().out == said
     data = config.parent / "data"
     assert (data / "tasks.md").read_text(encoding="utf-8").startswith("# Active\n- -1 on the RFC")
     assert (data / "events.log").read_text(encoding="utf-8").count("\n") == 4
     assert glance(config) == 0  # no line: the lists
     shown = capsys.readouterr().out
     assert shown.startswith("Active\n  -1 on the RFC\nFocus\n  nothing\n")
+    assert "Parked\n  1  fix the build · queued\n" in shown
     assert "Quick\n  q1  reply to Sam\n" in shown
     assert glance(config, "--skill") == 0
     assert capsys.readouterr().out == f"{skill(CommandWords())}\n"

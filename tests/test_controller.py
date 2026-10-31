@@ -37,13 +37,17 @@ def controller(folder: Path, agents: Agents | None = None) -> Controller:
 def test_a_command_is_saved_then_shown_then_logged(tmp_path: Path) -> None:
     glance = controller(tmp_path)
     glance.open()
-    view = glance.run("new fix the build")
-    assert view == View(Lists(Task("fix the build"), ()), "started fix the build", accepted=True)
+    glance.run("new fix the build")
+    glance.write_history()
+    view = glance.run("s p1")
+    said = "switched to fix the build"
+    assert view == View(Lists(Task("fix the build"), ()), said, accepted=True)
     assert controller(tmp_path).open().lists == view.lists  # saved: a fresh start sees it
-    assert not (tmp_path / "events.log").exists()  # history is written after drawing
+    log = tmp_path / "events.log"
+    assert log.read_text(encoding="utf-8").count("\n") == 1  # history is written after drawing
     assert glance.day().spans == (Span("fix the build", NOW, NOW, going=True),)  # already
     glance.write_history()
-    assert (tmp_path / "events.log").read_text(encoding="utf-8").count("\n") == 1
+    assert log.read_text(encoding="utf-8").count("\n") == 2
     glance.open()  # read back from events.log, not counted twice
     assert glance.day().spans == (Span("fix the build", NOW, NOW, going=True),)
 
@@ -128,7 +132,7 @@ def test_a_failed_save_leaves_memory_unchanged(tmp_path: Path) -> None:
         glance.run("new lost")
     assert glance.lists == Lists()
     (tmp_path / "tasks.md.tmp").rmdir()
-    assert glance.run("new kept").message == "started kept"  # no false "tasks.md changed"
+    assert glance.run("new kept").message.startswith("added kept")  # no false "tasks.md changed"
 
 
 def test_an_edit_after_opening_reloads_instead_of_guessing(tmp_path: Path) -> None:
