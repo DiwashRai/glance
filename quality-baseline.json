@@ -76,8 +76,8 @@
   "cyclomatic_exceptions": {},
   "module_exceptions": {},
   "budget": {
-    "stage": 4,
-    "start_lines": 2993,
+    "stage": 5,
+    "start_lines": 4089,
     "max_new_lines": 1000
   },
   "raises": [
@@ -95,6 +95,11 @@
       "date": "2026-10-18",
       "what": "budget.stage, budget.start_lines",
       "reason": "Start stage 4 (time: the Today timeline first, then check-ins, coming back, planning). Stage 3 ended at +702 of 1000 on glance-v2 (the tactile pass was cut), so start_lines moves to its end (2291 + 702). Stage 4 keeps 1000."
+    },
+    {
+      "date": "2026-10-31",
+      "what": "budget.stage, budget.start_lines",
+      "reason": "Start stage 5 (check-ins at :25 and :55, the back-after-being-away nudge, running over and extend). Stage 4 ended at +1096 of 1000 on glance-v2: it grew from Today and blocks to agents, the CLI, messages and the HUD, and had its simplification pass in #20-#22. The owner accepted the overrun on 2026-10-20 rather than cut further, as the code is simple as it is. start_lines moves to its end (2993 + 1096). Stage 5 keeps 1000."
     }
   ]
 }
