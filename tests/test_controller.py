@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from app.controller import Controller, View
-from app.core.model import CommandWords, Idle, Lists, Task
+from app.core.model import CommandWords, Idle, Lists, ParkedTask, Queued, Task
 from app.core.today import Span
 from app.store import Store
 
@@ -35,10 +35,12 @@ def controller(folder: Path, agents: Agents | None = None) -> Controller:
 
 
 def test_a_command_is_saved_then_shown_then_logged(tmp_path: Path) -> None:
+    Store(tmp_path).save(Lists(parked=(ParkedTask(Task("fix the build"), Queued()),)))
     glance = controller(tmp_path)
     glance.open()
-    view = glance.run("new fix the build")
-    assert view == View(Lists(Task("fix the build"), ()), "started fix the build", accepted=True)
+    view = glance.run("s p1")
+    said = "switched to fix the build"
+    assert view == View(Lists(Task("fix the build"), ()), said, accepted=True)
     assert controller(tmp_path).open().lists == view.lists  # saved: a fresh start sees it
     assert not (tmp_path / "events.log").exists()  # history is written after drawing
     assert glance.day().spans == (Span("fix the build", NOW, NOW, going=True),)  # already
@@ -128,7 +130,7 @@ def test_a_failed_save_leaves_memory_unchanged(tmp_path: Path) -> None:
         glance.run("new lost")
     assert glance.lists == Lists()
     (tmp_path / "tasks.md.tmp").rmdir()
-    assert glance.run("new kept").message == "started kept"  # no false "tasks.md changed"
+    assert glance.run("new kept").message.startswith("added kept")  # no false "tasks.md changed"
 
 
 def test_an_edit_after_opening_reloads_instead_of_guessing(tmp_path: Path) -> None:

@@ -11,6 +11,7 @@ Focus
 Parked
   1  1129 password reset flow · waiting on review
   2  Tidy logging config · left off: half done on chore/logging
+  3  Bump deps · queued
 Quick
   q1  merge 1129 ~3m
 Today
@@ -25,7 +26,7 @@ from collections.abc import Iterable
 from datetime import date
 
 from app.core import blocks
-from app.core.model import FromQuick, Idle, Lists, ParkedTask, Task, parked_note, shown
+from app.core.model import FromQuick, Idle, Lists, ParkedTask, Queued, Task, parked_note, shown
 from app.core.tasks_md import BOXES
 
 NOTHING = "  nothing"
@@ -57,7 +58,8 @@ def _active(active: Task | FromQuick | Idle) -> tuple[str, ...]:
 
 
 def _parked(item: ParkedTask) -> str:
-    return " · ".join(part for part in (shown(item.task), parked_note(item)) if part)
+    queued = "queued" if item.reason == Queued() else ""
+    return " · ".join(part for part in (shown(item.task), queued, parked_note(item)) if part)
 
 
 def _numbered(rows: Iterable[str], prefix: str = "") -> tuple[str, ...]:

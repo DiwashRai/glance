@@ -57,12 +57,16 @@ The priority side is read top to bottom: "can I do this right now? No? Next one.
 |---|---|---|
 | Active | 1 | What I'm working on right now. |
 | Focus | 1-2 | What the work is for, kept in view as a reminder: something I need to deliver ("fix the vulnerabilities"), or something I'm chipping away at over time ("migrate the build", in its own worktree). Never made active. Two at most, so I chip away at one or two things instead of carrying five that never get done. Still loose: it may become a queue later. |
-| Parked | any | Tasks I've put away: paused or blocked. |
+| Parked | any | The queue, shown as Queue: new tasks I haven't started, and tasks I've put away (paused or blocked). |
 
 Parked in more detail:
 
+- A new task goes to the bottom, with no note: Parked is my queue of things to do. A task I put away
+  goes on top.
 - A paused task has a "where I left off" note. A blocked task says what it's waiting on.
-- Only the most recently touched few are shown; the rest are one search away.
+- Markers tell them apart: a solid grey dot for a new task, a white ring for a paused one, a yellow
+  ring for a blocked one.
+- Only the top few are shown; the rest are one search away.
 - A blocked task is marked "ready" when it's unblocked.
 - Parked tasks come back in the morning routine and whenever Active is empty.
 - After about a week untouched, glance asks "keep or drop?".
@@ -75,8 +79,8 @@ The time side:
 | Quick | Small things to do while I wait for a build or an agent, with an optional rough size (`~3m`): follow-ups ("merge 1129"), admin, small reviews. Smallest first, so I pick by "what fits in the time I have", not by priority. Keeping them quick is the point: anything longer deserves its own block. |
 
 Glance keeps its own files for these lists (see Data). Task titles stay short at work ("do ticket
-1135"); the detail lives in Jira, GitHub and so on. Starting a new task parks the active one and
-says so.
+1135"); the detail lives in Jira, GitHub and so on. Adding a new task leaves the active one alone
+and says where the new one went ("added fix the build to the queue as p4 · s p4 to start it").
 
 ## Steps
 
@@ -106,8 +110,8 @@ As I type, the words glance picked up are coloured, so I can see what it will do
 |---|---|
 | `park <note>` (also `pause`, `shelve`, `defer`) | Park the active task with a "left off" note |
 | `wait <reason>` | Park the active task as blocked on something |
-| `switch <name>` (or `s`) | Make a parked task active; the current one is parked |
-| `<title>`, or `new <title>` (or `+`) | Start a new task; the current one is parked |
+| `switch <name or row>` (or `s`) | Make a parked task active (`s p2`); the current one is parked on top |
+| `<title>`, or `new <title>` (or `+`) | Add a task to the bottom of Parked; the active task is left alone |
 | `done` (or `d`) | Finish the current step, or the task if it has no steps. `done q2` ticks off a Quick item without starting it |
 | `skip` (or `>`) | Skip the current step; skipped steps come back round once |
 | `finish` | Finish the active task now, whatever its steps |
@@ -281,7 +285,7 @@ https://claude.ai/artifact/74pBpUYyeYhkLdDXNPL8yX. The nudge prototypes are on t
 - **Tactile feel is the secret ingredient.** Tasks should feel like physical objects slotting in and
   out of place. This needs a lot of tuning (timing, easing, bounce, maybe sound) once there's a real
   version, and it's worth the effort.
-- Both side columns have the same fixed height. Parked shows as many recent items as fit. Quick
+- Both side columns have the same fixed height. The queue shows as many items from the top as fit. Quick
   shows the top few plus "+N more". Today shows 1 hour back and 3 hours ahead, stretched to fill
   the space (any more and a half-hour bar is too thin to label), with later events listed
   underneath.

@@ -9,12 +9,12 @@ from app.core.model import CommandWords
 # What each kind of line looks like, in the default command words. A test runs each one, so
 # they stay right.
 EXAMPLES = (
-    ("new reply to Sam's email", "start a task, always with this word: the active one is parked"),
+    ("new reply to Sam's email", "add a task to the bottom of the queue, always with this word"),
     ("deep work 2pm for 2h", "plan a block today: its name, then a time and a length"),
     ("run 6pm for 1h !", "the ! means it must happen: a newer block never cuts it"),
     ("park stuck on the flaky test", "park the active task, with an optional note"),
     ("wait code review", "park it, waiting on something"),
-    ("switch docs", "resume a Parked or Quick task by a word in its title, or q1"),
+    ("switch p2", "start or resume a queued or Quick task by row (p2, q1) or title word"),
     ("step rerun CI", "add a step to the active task"),
     ("done", "tick the current step; with none open, finish the task"),
     ("skip", "skip the current step"),
@@ -30,7 +30,8 @@ SKILL = """\
 glance: the owner's working memory
 
 glance holds what the owner is on now and next: one Active task, one or two Focus goals, Parked
-tasks, Quick small things and today's time blocks. Keep it small: everything else lives elsewhere.
+tasks (the queue), Quick small things and today's time blocks. Keep it small: everything else
+lives elsewhere.
 
   glance               show the lists, numbered the way commands count them
   glance '<line>'      run a line, exactly as if the owner typed it into glance
@@ -53,10 +54,9 @@ name: the owner can then answer you from glance.
 - One glance command at a time, never in parallel: two at once can lose a change.
 - Single quotes, with any ' inside doubled: in double quotes PowerShell changes $ and `.
 - A line with no command word plans a block if it ends in a time and a length, and otherwise
-  starts a task, parking the owner's. So start tasks as above, and check the reply says what
-  you meant.
-- Numbers move as the lists change: run `glance` just before using one. In switch, a number
-  matches a word in a title (1129) before a Parked row, so switch by a word from the title.
+  adds a task to the queue. So add tasks as above, and check the reply says what you meant.
+- Numbers move as the lists change: run `glance` just before using one. In switch, a bare number
+  matches a word in a title (1129) before a row, so switch by row (p2, q1) or a title word.
 - Times: 2pm, 2:30pm, 14:00, noon, evening. A bare 9 is 9am, or 9pm once 9am has gone. Lengths:
   30m, 1h, 1h30m. Blocks are for today only, and a newer one cuts back any it lands on.
 - Steps in the lists: [x] done, [ ] open, [>] skipped, [-] skipped twice.

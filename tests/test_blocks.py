@@ -5,7 +5,18 @@ import pytest
 
 from app.core.blocks import planned
 from app.core.commands import Applied, Ask, Preview, Rejected, apply, parse_command, preview
-from app.core.model import Block, CommandWords, Event, Lists, NoPlan, Plan, Problem, Task
+from app.core.model import (
+    Block,
+    CommandWords,
+    Event,
+    Lists,
+    NoPlan,
+    ParkedTask,
+    Plan,
+    Problem,
+    Queued,
+    Task,
+)
 from app.core.tasks_md import parse, render
 
 NOW = datetime(2026, 10, 18, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
@@ -72,7 +83,7 @@ def test_a_block_is_planned_not_started() -> None:
     "text", ["call dentist 3pm", "lunch for 1h", "deep work 2pm for 1.5h", "x 25pm for 1h"]
 )
 def test_without_a_time_and_a_length_its_a_task(text: str) -> None:
-    assert applied(Lists(), text).lists == Lists(Task(text))
+    assert applied(Lists(), text).lists == Lists(parked=(ParkedTask(Task(text), Queued()),))
 
 
 def deep(start: time, end: time) -> Block:

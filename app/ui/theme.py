@@ -28,7 +28,6 @@ YELLOW = "#f4d03f"
 YELLOW_GLOW = "#40f4d03f"  # the yellow, faint: a ring round the HUD's dot
 BLUE = "#5dade2"
 RED = "#e74c3c"
-GREY_RING = "#a0a0a3"
 BACKDROP_DIM = 0.6  # how dark the screen behind the overlay goes, 0 to 1
 
 # The HUD on the taskbar in a light theme (canvas board W9, E). The dark one (C) is the overlay's
