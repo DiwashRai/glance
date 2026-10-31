@@ -14,7 +14,7 @@
   waiting on: review
 - Tidy logging config
   left off: half done on chore/logging
-- Bump deps
+- Bump deps * 2026-10-18
   queued
 
 # Quick
@@ -43,10 +43,12 @@ from app.core.model import (
     LeftOff,
     Lists,
     NoPlan,
+    NoStar,
     ParkedTask,
     Plan,
     Problem,
     Queued,
+    Star,
     Step,
     StepState,
     Task,
@@ -66,6 +68,8 @@ PLAIN = {"focus": "a focus", "quick": "a quick item", "today": "a block"}  # no 
 STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
 MARKS: dict[str, StepState] = {" ": "open", "x": "done", "X": "done", ">": "skipped", "-": "left"}
 BOXES: dict[StepState, str] = {"open": " ", "done": "x", "skipped": ">", "left": "-"}
+STAR = "*"  # then the day it was starred, at the end of the task's line: - Bump deps * 2026-10-18
+STARRED = re.compile(r"(.*\S)\s+\*\s+([0-9]{4}-[0-9]{2}-[0-9]{2})", re.ASCII)
 
 
 def render(lists: Lists) -> str:
@@ -91,7 +95,11 @@ def render(lists: Lists) -> str:
 
 
 def _task_line(task: Task) -> str:
-    return f"- {shown(task)}"
+    match task.star:
+        case Star(day=day):
+            return f"- {shown(task)} {STAR} {day.isoformat()}"
+        case NoStar():
+            return f"- {shown(task)}"
 
 
 def _step_lines(task: Task) -> list[str]:
@@ -133,6 +141,7 @@ class _Reader:
         self.quick: list[Task] = []
         self.plan: Plan | NoPlan = NoPlan()
         self.noted = False  # the last task already has its note
+        self.starred = False  # a task has the star: no other can
 
     def lists(self) -> Lists:
         quick = smallest_first(tuple(self.quick))
@@ -192,8 +201,6 @@ class _Reader:
             return "a task needs a title"
         self.noted = False
         match self.section:
-            case "parked":
-                self.parked.append(ParkedTask(sized(text), LeftOff()))
             case "quick":
                 self.quick.append(sized(text))
             case "focus":
@@ -201,13 +208,29 @@ class _Reader:
             case "today":
                 return self._block(text)
             case _:
-                return self._active(text)
+                return self._starrable(text)
         return ""
 
-    def _active(self, text: str) -> str:
+    def _starrable(self, text: str) -> str:
+        """An active or parked task, which may have the star. A Quick item's title is only its
+        title, so a `*` in it is kept."""
+        match _starred(text):
+            case _BadNote(message=message):
+                return message
+            case Task(star=Star()) if self.starred:
+                return "only one task can be the highlight"
+            case Task() as task:
+                self.starred = self.starred or task.star != NoStar()
+                return self._active(task) if self.section == "active" else self._parked(task)
+
+    def _parked(self, task: Task) -> str:
+        self.parked.append(ParkedTask(task, LeftOff()))
+        return ""
+
+    def _active(self, task: Task) -> str:
         match self.active:
             case Idle():
-                self.active = sized(text)
+                self.active = task
                 return ""
             case Task() | FromQuick():
                 return "only one task can be active"
@@ -254,6 +277,8 @@ class _Reader:
     def _home(self, text: str) -> str:
         """Once is enough: a second `home: quick` finds a FromQuick, not a Task."""
         match self.active:
+            case Task(star=Star()) if text.lower() == HOME_QUICK:
+                return "a task from quick can't be the highlight"
             case Task(steps=()) as task if text.lower() == HOME_QUICK:
                 self.active = FromQuick(task)
                 return ""
@@ -294,6 +319,21 @@ def _no_steps(section: str) -> str:
 @dataclass(frozen=True)
 class _BadNote:
     message: str
+
+
+def _starred(text: str) -> Task | _BadNote:
+    """`Bump deps ~1h * 2026-10-18`: a task, with the star it was given that day."""
+    found = STARRED.fullmatch(text)
+    if not found:
+        return sized(text)
+    task = sized(found[1])
+    match blocks.day(found[2]):
+        case blocks.Refused():
+            return _BadNote(f"{found[2]} isn't a real date, for the star")
+        case _ if not task.title:
+            return _BadNote("a task needs a title")
+        case day:
+            return replace(task, star=Star(day))
 
 
 def _reason(text: str) -> LeftOff | Waiting | Queued | _BadNote:

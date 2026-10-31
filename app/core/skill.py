@@ -10,6 +10,9 @@ from app.core.model import CommandWords
 # they stay right.
 EXAMPLES = (
     ("new reply to Sam's email", "add a task to the bottom of the queue, always with this word"),
+    ("new fix the build *", "add a task as today's highlight, at the top of the queue"),
+    ("star p2", "make a task today's highlight (one at a time), moving it to p1"),
+    ("unstar", "take the star off today's highlight"),
     ("deep work 2pm for 2h", "plan a block today: its name, then a time and a length"),
     ("run 6pm for 1h !", "the ! means it must happen: a newer block never cuts it"),
     ("park stuck on the flaky test", "park the active task, with an optional note"),
@@ -60,6 +63,8 @@ name: the owner can then answer you from glance.
 - Times: 2pm, 2:30pm, 14:00, noon, evening. A bare 9 is 9am, or 9pm once 9am has gone. Lengths:
   30m, 1h, 1h30m. Blocks are for today only, and a newer one cuts back any it lands on.
 - Steps in the lists: [x] done, [ ] open, [>] skipped, [-] skipped twice.
+- The highlight is the one task that would make the owner's day a success: star only what they
+  name. `star <words>` that match no task adds one. A Quick item can't be starred.
 - Removing, finishing and ticking off can't be undone: do them when the owner asks.
 - If glance says a tasks.md line is wrong, tell the owner: don't fix the file.
 """

@@ -29,10 +29,25 @@ class Step:
 
 
 @dataclass(frozen=True)
+class Star:
+    """The highlight: the one thing that would make the day a success. One task has it at most,
+    never a Quick item. From the day after `day` it's an earlier day's, kept until it's starred
+    again, another task is, or the task is done."""
+
+    day: date
+
+
+@dataclass(frozen=True)
+class NoStar:
+    pass
+
+
+@dataclass(frozen=True)
 class Task:
     title: str
     minutes: int = 0  # its rough size, 0 when none was given
     steps: tuple[Step, ...] = ()  # an ordered checklist, one level deep
+    star: Star | NoStar = NoStar()
 
 
 @dataclass(frozen=True)
@@ -203,7 +218,8 @@ class NoPlan:
 @dataclass(frozen=True)
 class Lists:
     active: Task | FromQuick | Idle = Idle()
-    parked: tuple[ParkedTask, ...] = ()  # parking puts a task on top, new tasks go last
+    # Parking or starring puts a task on top, new tasks go last
+    parked: tuple[ParkedTask, ...] = ()
     focus: tuple[str, ...] = ()  # at most FOCUS_SLOTS, oldest first
     quick: tuple[Task, ...] = ()  # smallest first
     plan: Plan | NoPlan = NoPlan()
@@ -224,6 +240,8 @@ EventKind = Literal[
     "skipped",
     "planned",  # a block added to today's plan
     "unplanned",
+    "starred",  # made today's highlight
+    "unstarred",
 ]
 
 
@@ -278,5 +296,7 @@ class CommandWords:
     finish: tuple[str, ...] = ("finish",)
     unblock: tuple[str, ...] = ("unblock",)
     remove: tuple[str, ...] = ("rm",)
+    star: tuple[str, ...] = ("star",)
+    unstar: tuple[str, ...] = ("unstar",)
     # Not command words: the agents a line starting with one space goes to, then two or more
     agents: tuple[str, ...] = ("assistant", "chief")

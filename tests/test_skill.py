@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
@@ -10,6 +10,7 @@ from app.core.model import (
     Lists,
     ParkedTask,
     Plan,
+    Star,
     Step,
     Task,
     Waiting,
@@ -18,7 +19,11 @@ from app.core.skill import EXAMPLES, skill
 
 NOW = datetime(2026, 10, 19, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
 BUSY = Lists(
-    active=Task("fix the build", steps=(Step("rerun CI", "done"), Step("read the trace"))),
+    active=Task(
+        "fix the build",
+        steps=(Step("rerun CI", "done"), Step("read the trace")),
+        star=Star(date(2026, 10, 19)),
+    ),
     parked=(
         ParkedTask(Task("review 1129"), Waiting("Sam")),
         ParkedTask(Task("write the docs", 30), LeftOff("half done")),
@@ -30,6 +35,9 @@ BUSY = Lists(
 # What each example in --skill says it does, on BUSY: a new example needs a line here
 SAID = {
     "new reply to Sam's email": "added reply to Sam's email to the queue as p3",
+    "new fix the build *": "added fix the build to the queue as p1 · ★ today's highlight",
+    "star p2": "★ write the docs ~30m is today's highlight (was: fix the build), now p1",
+    "unstar": "took the star off fix the build",
     "deep work 2pm for 2h": "planned deep work 14:00-16:00",
     "run 6pm for 1h !": "planned run 18:00-19:00 · must happen today",
     "park stuck on the flaky test": "parked fix the build",

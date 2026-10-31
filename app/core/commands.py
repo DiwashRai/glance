@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime
 
-from app.core import blocks, steps
+from app.core import blocks, highlight, steps
 from app.core.model import (
     FOCUS_SLOTS,
     Block,
@@ -26,6 +26,7 @@ from app.core.model import (
     ParkedTask,
     Plan,
     Queued,
+    Star,
     Task,
     Waiting,
     shown,
@@ -101,6 +102,19 @@ class Remove:
 
 
 @dataclass(frozen=True)
+class StarIt:
+    """Make a task today's highlight: the active one, or one picked by row or name, as switch
+    picks one. Words that match no task are added as a new one, starred."""
+
+    query: str = ""
+
+
+@dataclass(frozen=True)
+class Unstar:
+    extra: str = ""
+
+
+@dataclass(frozen=True)
 class Typed:
     """No command word: a block if it ends in a time and a length, else a new task. The text is
     as it was typed, so the words picked up from it can be shown where they are."""
@@ -119,7 +133,10 @@ class Ask:
 
 CardCommand = Focus | Unfocus | Remove  # a goal, or a row on a card
 StepCommand = AddStep | Skip | Finish  # the active task's steps
-Command = New | Park | Switch | Done | Quick | Unblock | Typed | CardCommand | StepCommand
+StarCommand = StarIt | Unstar
+Command = (
+    New | Park | Switch | Done | Quick | Unblock | Typed | CardCommand | StepCommand | StarCommand
+)
 
 
 @dataclass(frozen=True)
@@ -174,6 +191,8 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
         (words.finish, Finish),
         (words.unblock, Unblock),
         (words.remove, Remove),
+        (words.star, StarIt),
+        (words.unstar, Unstar),
     )
     for command_words, command in commands:
         if word in command_words:
@@ -189,14 +208,19 @@ def spaces_for(agent: str, words: CommandWords) -> int:
 
 def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Preview:
     """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
-    the command before it runs. A block's time, length and `!` are marked, with what it cuts, and
-    `rm` says what it would remove, as that can't be undone."""
+    the command before it runs. A block's time, length and `!` are marked, with what it cuts, a
+    new task's `*` is marked, `rm` says what it would remove, as that can't be undone, and `star`
+    and `unstar` say what they would do."""
     word = tuple(found.span() for found in blocks.WORD.finditer(text))[:1]
     match parse_command(text, words):
         case Ask(agent=agent):
             return Preview(agent=agent, note=agent)
         case Typed():
             return _preview_block(lists, text, now)
+        case New():
+            return _preview_star(text, word)
+        case StarIt() | Unstar() as star:
+            return _preview_said(word, apply(lists, star, now))
         case Remove() as remove:
             match apply(lists, remove, now):
                 case Applied(events=events):
@@ -210,7 +234,7 @@ def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Prev
 def _preview_block(lists: Lists, text: str, now: datetime) -> Preview:
     match blocks.typed(text, now.time()):
         case blocks.NotABlock():
-            return Preview()
+            return _preview_star(text)
         case blocks.Refused(why=why):
             return Preview(note=why)
         case blocks.Found(block=block, marks=marks):
@@ -221,6 +245,21 @@ def _preview_block(lists: Lists, text: str, now: datetime) -> Preview:
                     return Preview(marks, _cuts(cut), plan=plan)
 
 
+def _preview_star(text: str, word: tuple[tuple[int, int], ...] = ()) -> Preview:
+    """A new task's line: its command word, if it has one, and its `*`, if it has one."""
+    star = highlight.mark_span(text)
+    return Preview((*word, *star), "today's highlight" if star else "")
+
+
+def _preview_said(word: tuple[tuple[int, int], ...], result: Applied | Rejected) -> Preview:
+    """What `star` or `unstar` would do, as it will say it."""
+    match result:
+        case Applied(message=message):
+            return Preview(word, message)
+        case Rejected(reason=reason):
+            return Preview(word, reason)
+
+
 def _cuts(cut: tuple[tuple[Block, tuple[Block, ...]], ...]) -> str:
     """`trims deep work, replaces review`: the same before Enter and after."""
     return ", ".join(f"{'trims' if left else 'replaces'} {old.what}" for old, left in cut)
@@ -228,8 +267,8 @@ def _cuts(cut: tuple[tuple[Block, tuple[Block, ...]], ...]) -> str:
 
 def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
     match command:
-        case New(title=title):
-            return _new(lists, title, now)
+        case New() | Quick():
+            return _add_command(lists, command, now)
         case Park(reason=reason):
             return _park(lists, reason, now)
         case Switch(query=query):
@@ -240,12 +279,20 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _card_command(lists, command, now)
         case AddStep() | Skip() | Finish():
             return _step_command(lists, command, now)
-        case Quick(text=text):
-            return _quick(lists, text, now)
         case Typed(text=text):
             return _typed(lists, text, now)
         case Unblock(query=query):
             return _unblock(lists, query, now)
+        case StarIt() | Unstar():
+            return _star_command(lists, command, now)
+
+
+def _add_command(lists: Lists, command: New | Quick, now: datetime) -> Applied | Rejected:
+    match command:
+        case New(title=title):
+            return _new(lists, title, now)
+        case Quick(text=text):
+            return _quick(lists, text, now)
 
 
 def _set_aside(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied:
@@ -287,13 +334,136 @@ def _and(said: str) -> str:
 
 
 def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
-    task = sized(title)
+    """At the bottom of the queue, or at the top as today's highlight with a `*` at the end."""
+    text, star = highlight.marked(title)
+    task = sized(text)
     if not task.title:
         return Rejected("a task needs a title")
+    if star:
+        return _new_star(lists, task, now)
     queued = replace(lists, parked=(*lists.parked, ParkedTask(task, Queued())))
     row = f"p{len(queued.parked)}"
     said = f"added {shown(task)} to the queue as {row} · s {row} to start it"
     return Applied(queued, (Event(now, "added", task.title, "to the queue"),), said)
+
+
+def _new_star(lists: Lists, task: Task, now: datetime) -> Applied:
+    star = _starring(lists, task, now)
+    queued = replace(star.lists, parked=(ParkedTask(star.task, Queued()), *star.lists.parked))
+    added = Event(now, "added", task.title, "to the queue")
+    said = f"added {shown(task)} to the queue as p1 · ★ today's highlight{star.was}"
+    said += " · s p1 to start it"
+    return Applied(queued, (added, *star.events), said)
+
+
+@dataclass(frozen=True)
+class _Starring:
+    """The lists with no star left on them, the task with today's, and what was starred before."""
+
+    lists: Lists
+    task: Task
+    events: tuple[Event, ...]
+    was: str  # " (was: reply to Sam)", or ""
+
+
+def _starring(lists: Lists, task: Task, now: datetime) -> _Starring:
+    before = tuple(other for other in highlight.starred(lists) if other != task)
+    unstarred = tuple(Event(now, "unstarred", other.title, f"for {task.title}") for other in before)
+    events = (*unstarred, Event(now, "starred", task.title))
+    was = "".join(f" (was: {shown(other)})" for other in before)
+    starred = replace(task, star=Star(now.date()))
+    return _Starring(highlight.cleared(lists), starred, events, was)
+
+
+def _star_command(lists: Lists, command: StarCommand, now: datetime) -> Applied | Rejected:
+    match command:
+        case Unstar(extra=extra) if extra:
+            return Rejected("unstar takes the star off: type just unstar")
+        case Unstar():
+            return _unstar(lists, now)
+        case StarIt(query=""):
+            return _star_active(lists, now)
+        case StarIt(query=query):
+            return _star_query(lists, query, now)
+
+
+def _unstar(lists: Lists, now: datetime) -> Applied | Rejected:
+    starred = highlight.starred(lists)
+    if not starred:
+        return Rejected("nothing is starred")
+    task = starred[0]
+    event = Event(now, "unstarred", task.title)
+    return Applied(highlight.cleared(lists), (event,), f"took the star off {shown(task)}")
+
+
+def _star_active(lists: Lists, now: datetime) -> Applied | Rejected:
+    match lists.active:
+        case Idle():
+            return Rejected("nothing is active: star p<number> stars a queued task")
+        case FromQuick():
+            return Rejected(highlight.NOT_QUICK)
+        case Task(star=star) as task if star == Star(now.date()):
+            return Rejected(f"{shown(task)} is already today's highlight")
+        case Task() as task:
+            star = _starring(lists, task, now)
+            said = f"★ {shown(task)} is today's highlight{star.was}"
+            return Applied(replace(star.lists, active=star.task), star.events, said)
+
+
+def _star_parked(lists: Lists, index: int, now: datetime) -> Applied | Rejected:
+    """To the top of the queue, as it's the first thing to pick up."""
+    chosen = lists.parked[index]
+    if index == 0 and chosen.task.star == Star(now.date()):
+        return Rejected(f"{shown(chosen.task)} is already today's highlight")
+    star = _starring(replace(lists, parked=_without(lists.parked, index)), chosen.task, now)
+    parked = (replace(chosen, task=star.task), *star.lists.parked)
+    said = f"★ {shown(chosen.task)} is today's highlight{star.was}, now p1"
+    return Applied(replace(star.lists, parked=parked), star.events, said)
+
+
+def _star_query(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
+    """`p2` is the queue's row 2 and `q2` is refused. Other words are looked for in the active
+    task, the queue and Quick, as switch does; words that match none are a new task."""
+    if QUICK_ROW.fullmatch(query):
+        return Rejected(highlight.NOT_QUICK)
+    if PARKED_ROW.fullmatch(query):
+        match _row(query[1:], len(lists.parked), f"there's no {query.lower()} in the queue"):
+            case Rejected() as rejected:
+                return rejected
+            case _Picked(index=index):
+                return _star_parked(lists, index, now)
+    active = tuple(("active", task.title) for task in highlight.held(lists.active))
+    rows = (*active, *_numbered((item.task.title for item in lists.parked), "p"))
+    rows += _numbered((task.title for task in lists.quick), "q")
+    hits = [i for i, (_, title) in enumerate(rows) if _matches(query, title)]
+    match hits:
+        case [index]:
+            return _star_at(lists, index - len(active), now)
+        case []:
+            return _star_row_or_new(lists, query, now)
+        case _:
+            options = ", ".join(f"{rows[i][0]} {rows[i][1]}" for i in hits)
+            return Rejected(f"'{query}' matches {len(hits)}: {options}")
+
+
+def _star_at(lists: Lists, index: int, now: datetime) -> Applied | Rejected:
+    """-1 is the active task, then the queue's rows from 0, then Quick's."""
+    if index < 0:
+        return _star_active(lists, now)
+    if index < len(lists.parked):
+        return _star_parked(lists, index, now)
+    return Rejected(highlight.NOT_QUICK)
+
+
+def _star_row_or_new(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
+    """A number that names no task is the queue's row, if there's one."""
+    if _is_number(query):
+        match _row(query, len(lists.parked), ""):
+            case _Picked(index=index):
+                return _star_parked(lists, index, now)
+            case Rejected():
+                pass
+    return _new(lists, f"{query} {highlight.MARK}", now)
 
 
 def _park(lists: Lists, reason: LeftOff | Waiting, now: datetime) -> Applied | Rejected:
@@ -324,7 +494,8 @@ def _done(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
 
 
 def _finish(lists: Lists, task: Task, now: datetime) -> Applied:
-    leftover = steps.leftover(task)
+    star = highlight.said(task, now.date())
+    leftover = (*steps.leftover(task), *((f"{star} done",) if star else ()))
     finished = Event(now, "finished", task.title, ", ".join(leftover))
     said = " · ".join((f"finished {shown(task)}", *leftover))
     return Applied(replace(lists, active=Idle()), (finished,), said)

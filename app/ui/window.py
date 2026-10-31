@@ -193,9 +193,10 @@ class Window(QWidget):
         self.prompt.show_preview(self.controller.preview(self.input.text()))
 
     def draw(self, view: View) -> None:
-        self.active.show_active(view.lists.active)
+        today = self.controller.now().date()
+        self.active.show_active(view.lists.active, today)
         self.focus.show_focus(view.lists.focus)
-        parts.show_parked(self.parked, view.lists.parked)
+        parts.show_parked(self.parked, view.lists.parked, today)
         parts.show_quick(self.quick, view.lists.quick)
         self.today.show_day(self.controller.day())
         self._say(view.problem or view.message, _tone(view))

@@ -62,10 +62,10 @@ The priority side is read top to bottom: "can I do this right now? No? Next one.
 Parked in more detail:
 
 - A new task goes to the bottom, with no note: Parked is my queue of things to do. A task I put away
-  goes on top.
+  goes on top, and so does today's highlight (see Today's highlight).
 - A paused task has a "where I left off" note. A blocked task says what it's waiting on.
 - Markers tell them apart: a solid grey dot for a new task, a white ring for a paused one, a yellow
-  ring for a blocked one.
+  ring for a blocked one. The highlight's star takes the place of its marker.
 - Only the top few are shown; the rest are one search away.
 - A blocked task is marked "ready" when it's unblocked.
 - Parked tasks come back in the morning routine and whenever Active is empty.
@@ -81,6 +81,25 @@ The time side:
 Glance keeps its own files for these lists (see Data). Task titles stay short at work ("do ticket
 1135"); the detail lives in Jira, GitHub and so on. Adding a new task leaves the active one alone
 and says where the new one went ("added fix the build to the queue as p4 · s p4 to start it").
+
+## Today's highlight
+
+The one task that would make the day a success, marked with a yellow star. It makes the next pick
+obvious when Active empties, and keeps one thing that must get done in view as the plan drifts.
+
+- Starred as it's added (`new fix the build *`, a lone `*` at the end), or later with `star p3`,
+  `star 1135` (by row or name, as `switch` finds one) or `star` alone for the active task. `star`
+  with words that match no task adds them as a new task, starred, and says it was added.
+- One at a time: starring another moves the star, and the message names the one it came from.
+  `unstar` takes it off. A Quick item can't have it: it's meant to be small.
+- Starring a queued task, or adding a starred one, puts it at p1. The star stays with the task when
+  it's started or parked.
+- On the queue, a filled yellow star takes the place of the row's marker. On Active, it sits after
+  the flame. Finishing it says "today's highlight done".
+- From midnight it's yesterday's: the star turns hollow, and a queued task with no other note says
+  "yesterday's highlight". It stays until it's starred again (which fills it for today), another
+  task is starred, or it's finished. Nothing silently disappears.
+- In `tasks.md`, the star and its day go at the end of the task's line: `- fix the build * 2026-10-31`.
 
 ## Steps
 
@@ -111,7 +130,8 @@ As I type, the words glance picked up are coloured, so I can see what it will do
 | `park <note>` (also `pause`, `shelve`, `defer`) | Park the active task with a "left off" note |
 | `wait <reason>` | Park the active task as blocked on something |
 | `switch <name or row>` (or `s`) | Make a parked task active (`s p2`); the current one is parked on top |
-| `<title>`, or `new <title>` (or `+`) | Add a task to the bottom of Parked; the active task is left alone |
+| `<title>`, or `new <title>` (or `+`) | Add a task to the bottom of Parked; the active task is left alone. A lone `*` at the end makes it today's highlight, at the top |
+| `star <name or row>` / `unstar` | Make a task today's highlight (`star` alone: the active one), moving it to the top of Parked; take the star off |
 | `done` (or `d`) | Finish the current step, or the task if it has no steps. `done q2` ticks off a Quick item without starting it |
 | `skip` (or `>`) | Skip the current step; skipped steps come back round once |
 | `finish` | Finish the active task now, whatever its steps |
@@ -308,8 +328,8 @@ PC. The agent's notes about how I work are kept separately in each environment.
 
 Plain files on each machine, kept out of OneDrive-synced folders:
 
-- `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps, Quick
-  items and today's planned blocks (under `# Today 2026-10-18`; another day's are ignored), as
+- `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps, the
+  highlight's star, Quick items and today's planned blocks (under `# Today 2026-10-18`; another day's are ignored), as
   plain Markdown that I or an agent can read and edit. Glance rewrites it in a fixed
   form after every command, saves it safely (write a temp file, then swap it in), refuses a file
   it can't read rather than guessing, and notices when it was edited outside glance.

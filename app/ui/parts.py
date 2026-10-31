@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable
+from datetime import date
 
 from PySide6.QtCore import QMimeData, QPointF, Qt, Signal
 from PySide6.QtGui import (
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import highlight
 from app.core.commands import Preview, spaces_for
 from app.core.model import (
     FOCUS_SLOTS,
@@ -48,7 +50,6 @@ from app.core.model import (
     Queued,
     Task,
     Waiting,
-    parked_note,
     shown,
     size_text,
     step_line,
@@ -107,6 +108,8 @@ class ActiveCard(QFrame):
         flame.setPixmap(icons.pixmap(icons.FLAME, theme.ORANGE, 14))
         top.addWidget(flame)
         top.addWidget(header("Active", "active-header"))
+        self.star = QLabel()  # today's highlight, or an earlier day's
+        top.addWidget(self.star)
         self.step = Elided("dim", 13)  # where it's up to: "rerun CI · 2/4"
         self.step.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         top.addWidget(self.step, stretch=1)
@@ -122,11 +125,15 @@ class ActiveCard(QFrame):
         self.setGraphicsEffect(self.glow)
         self.setFixedHeight(76)
 
-    def show_active(self, active: Task | FromQuick | Idle) -> None:
+    def show_active(self, active: Task | FromQuick | Idle, today: date) -> None:
         match working(active):
             case Task() as task:
                 self.title.show_text(shown(task))
                 self.step.show_text(step_line(task))
+                shine = highlight.shine(task, today)
+                self.star.setVisible(shine != "none")
+                self.star.setPixmap(_star(shine, 14))
+                self.star.setToolTip(highlight.said(task, today))
                 self._mode("active", working=True)
             case Idle():
                 self._mode("idle", working=False)
@@ -253,8 +260,8 @@ def parked_card() -> ListCard:
     return card
 
 
-def show_parked(card: ListCard, parked: tuple[ParkedTask, ...]) -> None:
-    card.show_rows(len(parked), lambda index: _row(index + 1, parked[index]))
+def show_parked(card: ListCard, parked: tuple[ParkedTask, ...], today: date) -> None:
+    card.show_rows(len(parked), lambda index: _row(index + 1, parked[index], today))
 
 
 def quick_card() -> ListCard:
@@ -281,7 +288,7 @@ def _quick_row(number: int, task: Task) -> QWidget:
     return row
 
 
-def _row(number: int, parked: ParkedTask) -> QWidget:
+def _row(number: int, parked: ParkedTask, today: date) -> QWidget:
     row = QWidget()
     layout = QVBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
@@ -289,14 +296,16 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
     top = QHBoxLayout()
     top.setSpacing(8)
     marker = QLabel()
-    marker.setPixmap(_marker(parked.reason))
+    shine = highlight.shine(parked.task, today)
+    marker.setPixmap(_marker(parked.reason) if shine == "none" else _star(shine, 12))
+    marker.setToolTip(highlight.said(parked.task, today))
     title = Elided("title", 14)
     title.show_text(shown(parked.task))
     top.addWidget(marker)
     top.addWidget(label(str(number), "number", 12))
     top.addWidget(title, stretch=1)
     layout.addLayout(top)
-    note = parked_note(parked)
+    note = highlight.note(parked, today)
     if note:
         sub = Elided("dim", 12)
         sub.setContentsMargins(36, 0, 0, 0)
@@ -306,7 +315,8 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
 
 
 def _marker(reason: LeftOff | Waiting | Queued) -> QPixmap:
-    """Grey dot for new, white ring for left off, yellow ring for waiting."""
+    """Grey dot for new, white ring for left off, yellow ring for waiting. A star takes its place
+    on the highlight."""
     pixmap = icons.blank(12)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -323,6 +333,11 @@ def _marker(reason: LeftOff | Waiting | Queued) -> QPixmap:
             painter.drawEllipse(2, 2, 8, 8)
     painter.end()
     return pixmap
+
+
+def _star(shine: highlight.Shine, size: int) -> QPixmap:
+    """Filled yellow for today's highlight, hollow for an earlier day's."""
+    return icons.pixmap(icons.STAR_FILLED if shine == "today" else icons.STAR, theme.YELLOW, size)
 
 
 NOTE_WIDTH = 260
