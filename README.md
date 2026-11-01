@@ -1,9 +1,11 @@
+
 # Glance
 
 ## summary
 
-A way to stay deeply focused on one task while still being able to _glance_ at what else is waiting on you (emails, code
-reviews, Jira), without context switching to email clients, browsers and so on. `docs/vision.md` says where it's going.
+A way to stay deeply focused on one task while still being able to *glance* at what else is
+waiting on you (emails, code reviews, Jira), without context switching to email clients,
+browsers and so on. `docs/vision.md` says where it's going.
 
 Instructions are for Windows at the moment.
 
@@ -11,49 +13,51 @@ Instructions are for Windows at the moment.
 
 Glance has two parts:
 
-- **The HUD:** the counts on the taskbar, just left of the tray (unread mail, reviews, tickets): in a box, or
-  tray-native with each number in a badge on its icon. A number turns orange when it's high and red when very high; a
-  count of 0 shows its icon alone. A yellow dot goes first while a message waits for you. Click it to open the overlay;
-  right-click it (or the tray icon) to pick the look, and a light or dark theme or the system default.
-- **The overlay:** press Ctrl+Space anywhere to open it, type a command, Enter to run it, Esc to hide it. Hold
-  Ctrl+Space instead to peek: it shows while you hold, without taking the focus, and hides when you let go. Glance lives
-  in the tray; right-click the orange dot to quit.
+- **The HUD:** the counts on the taskbar, just left of the tray (unread mail, reviews, tickets):
+  in a box, or tray-native with each number in a badge on its icon. A number turns orange when
+  it's high and red when very high; a count of 0 shows its icon alone. A yellow dot goes first
+  while a message waits for you. Click it to open the overlay; right-click it (or the tray icon)
+  to pick the look, and a light or dark theme or the system default.
+- **The overlay:** press Ctrl+Space anywhere to open it, type a command, Enter to run it, Esc to
+  hide it. Hold Ctrl+Space instead to peek: it shows while you hold, without taking the focus,
+  and hides when you let go. Glance lives in the tray; right-click the orange dot to quit.
 
-| Command                                       | Does                                                                                                                                                                                                                                                                                                                |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<title>` (or `new <title>`, `+`)             | Add a task to the bottom of the queue (the Parked list); Active is left alone. Use `new` for a title that starts with a command word (`new wait for Sam`). A lone `*` at the end stars it and puts it at p1                                                                                                         |
-| `<what> 2pm for 1h`                           | Plan a block of time today: `deep work 9 for 2h` (the next 9 o'clock), `call for 30m 14:30`. Times: `2pm`, `14:30`, `noon`, `evening`. Lengths: `30m`, `90m`, `1h30m`. `!` at the end: it must happen. A block cuts back any it lands on, whatever their names. A line that doesn't end exactly like this is a task |
-| `park <note>` (or `pause`, `shelve`, `defer`) | Park the active task, with an optional "left off" note                                                                                                                                                                                                                                                              |
-| `wait <what>`                                 | Park the active task as waiting on something                                                                                                                                                                                                                                                                        |
-| `switch <title or row>` (or `s`)              | Make a queued task active (`s p2`), or a Quick item (`s q2`). The active one is parked on top                                                                                                                                                                                                                       |
-| `done` (or `d`)                               | Tick off the current step, or finish the task if it has none. `done q2` ticks off a Quick item                                                                                                                                                                                                                      |
-| `step <text>`                                 | Add a step to the active task                                                                                                                                                                                                                                                                                       |
-| `skip` (or `>`)                               | Skip the current step; skipped steps come back round once                                                                                                                                                                                                                                                           |
-| `finish`                                      | Finish the active task now, whatever its steps                                                                                                                                                                                                                                                                      |
-| `focus <text>`                                | Keep one of at most two goals in view, above Parked                                                                                                                                                                                                                                                                 |
-| `unfocus <name or number>`                    | Take a goal out of Focus                                                                                                                                                                                                                                                                                            |
-| `quick <text> ~5m` (or `q`)                   | Add something small to do while you wait; the size is optional                                                                                                                                                                                                                                                      |
-| `unblock <name or number>`                    | Take a block off today's plan                                                                                                                                                                                                                                                                                       |
-| `rm f1` / `rm p1` / `rm q1`                   | Take a row off Focus, Parked or Quick without starting it or finishing it. By row only                                                                                                                                                                                                                              |
-| `star <title or row>`                         | Make a task today's highlight and move it to p1: one at a time, never a Quick item. `star` alone is the active task, which stays active. A number with no title match is a row. Other words that match no task add a new starred one                                                                                |
-| `unstar`                                      | Take the star off                                                                                                                                                                                                                                                                                                   |
+| Command | Does |
+|---|---|
+| `<title>` (or `new <title>`, `+`) | Add a task to the bottom of the queue (the Parked list); Active is left alone. Use `new` for a title that starts with a command word (`new wait for Sam`). A lone `*` at the end stars it and puts it at the top |
+| `<what> 2pm for 1h` | Plan a block of time today: `deep work 9 for 2h` (the next 9 o'clock), `call for 30m 14:30`. Times: `2pm`, `14:30`, `noon`, `evening`. Lengths: `30m`, `90m`, `1h30m`. `!` at the end: it must happen. A block cuts back any it lands on, whatever their names. A line that doesn't end exactly like this is a task |
+| `park <note>` (or `pause`, `shelve`, `defer`) | Park the active task, with an optional "left off" note |
+| `wait <what>` | Park the active task as waiting on something |
+| `switch <title or row>` (or `s`, `do`) | Make a queued task active (`s 2`), or a Quick item (`s q2`). The active one is parked on top. A number on its own is always a queue row |
+| `done` (or `d`) | Tick off the current step, or finish the task if it has none. `done q2` ticks off a Quick item |
+| `step <text>` | Add a step to the active task |
+| `skip` (or `>`) | Skip the current step; skipped steps come back round once |
+| `finish` | Finish the active task now, whatever its steps |
+| `focus <text>` | Keep one of at most two goals in view, above Parked |
+| `unfocus <name or number>` | Take a goal out of Focus |
+| `quick <text> ~5m` (or `q`) | Add something small to do while you wait; the size is optional |
+| `unblock <name or number>` | Take a block off today's plan |
+| `rm 1` / `rm f1` / `rm q1` | Take a row off the queue, Focus or Quick without starting it or finishing it. By row only |
+| `star` / `star 3` / `star <title>` | Star the active task, or queue row 3, which moves to the top. Words add a new starred task |
+| `unstar` / `unstar 3` | Take the star off the active task or queue row 3 |
 
-As you type, the words glance picked up turn blue (a block's time and length, a task's `*`, or a command word), and a
-note on the right says which blocks a new one cuts back. No blue means it'll be a task.
+As you type, the words glance picked up turn blue (a block's time and length, or a command word),
+and a note on the right says which blocks a new one cuts back. No blue means it'll be a task.
 
-**Talking to your agents.** A line starting with one space is typed into your `assistant` agent's herdr pane, as if
-you'd typed it there; two or more spaces send it to `chief`. The `›` and the agent's name turn yellow, or the note says
-in red that it isn't running (your text stays to send again). Replies are in the agent's pane. The names are `agents` in
-`[glance]`.
+**Talking to your agents.** A line starting with one space is typed into your `assistant` agent's
+herdr pane, as if you'd typed it there; two or more spaces send it to `chief`. The `›` and the
+agent's name turn yellow, or the note says in red that it isn't running (your text stays to send
+again). Replies are in the agent's pane. The names are `agents` in `[glance]`.
 
-**From the command line.** `glance` prints your lists, numbered the way commands count them, and `glance '<line>'` runs
-a line as if you'd typed it into the overlay: `glance 'quick reply to Sam'` (single quotes, so PowerShell leaves `$`
-alone). It's how your agents change your lists (`glance --skill` tells them how), so their changes are checked and
-logged like yours. The overlay shows the change when it next opens. Install it once, from the glance folder:
-`uv tool install -e .`
+**From the command line.** `glance` prints your lists, numbered the way commands count them, and
+`glance '<line>'` runs a line as if you'd typed it into the overlay: `glance 'quick reply to Sam'`
+(single quotes, so PowerShell leaves `$` alone).
+It's how your agents change your lists (`glance --skill` tells them how), so their changes are
+checked and logged like yours. The overlay shows the change when it next opens. Install it once,
+from the glance folder: `uv tool install -e .`
 
-Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and what happened is logged to
-`events.log` next to it.
+Your lists live in `%LOCALAPPDATA%\glance\tasks.md`, plain Markdown you can edit by hand, and
+what happened is logged to `events.log` next to it.
 
 ## Setting it up
 
@@ -63,23 +67,24 @@ You need [uv](https://docs.astral.sh/uv/). Then:
 scripts\run_glance.cmd
 ```
 
-It installs or updates glance's dependencies, collects the counts once, and starts glance. glance refuses to run a
-second copy, so starting it twice is harmless.
+It installs or updates glance's dependencies, collects the counts once, and starts glance.
+glance refuses to run a second copy, so starting it twice is harmless.
 
-**Settings.** Keep tracked defaults in `config.toml` and your own settings in `config.local.toml`, which git ignores, so
-your tokens don't block `git pull`. Glance and the collector use `config.local.toml` if it exists, else `config.toml`.
+**Settings.** Keep tracked defaults in `config.toml` and your own settings in
+`config.local.toml`, which git ignores, so your tokens don't block `git pull`. Glance and the
+collector use `config.local.toml` if it exists, else `config.toml`.
 
 - `[glance]`: glance's own settings, all optional (see `config.toml`).
-- `[updater]`, `[providers]` and `[[entries]]`: where the counts come from. Each entry's `icon` can be `mail`, `todo`,
-  `jira` or `pr` for an outline icon, or any text, such as a Nerd Font glyph.
+- `[updater]`, `[providers]` and `[[entries]]`: where the counts come from. Each entry's `icon`
+  can be `mail`, `todo`, `jira` or `pr` for an outline icon, or any text, such as a Nerd Font
+  glyph.
 
-**The counts.** `update_status.py` (the collector) asks each provider for its count and writes them to
-`[updater].output_path`, which the HUD reads. It runs once and exits, so schedule `scripts\update_status.vbs` (it runs
-`update_status.cmd` with no window) to keep the counts fresh. Run `scripts\update_status.cmd --dry-run` to see what it
-would write.
+**The counts.** `update_status.py` (the collector) asks each provider for its count and writes
+them to `[updater].output_path`, which the HUD reads. It runs once and exits, so schedule
+`scripts\update_status.vbs` (it runs `update_status.cmd` with no window) to keep the counts
+fresh. Run `scripts\update_status.cmd --dry-run` to see what it would write.
 
 **Start at login,** with Task Scheduler:
-
 - Create a task that triggers on logon. Add a delay if you want.
 - General: set "Run only when user is logged on".
 - Action: start a program, `C:\Path\to\glance\scripts\run_glance.cmd`.

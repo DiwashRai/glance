@@ -253,7 +253,7 @@ class ListCard(QFrame):
 def parked_card() -> ListCard:
     """Queue rows, parked first and new last."""
     corner = "parked on top · new at the bottom"
-    card = ListCard("Queue", corner, "nothing queued", "s p<n> to start")
+    card = ListCard("Queue", corner, "nothing queued", "s <n> to start")
     card.setFixedWidth(340)
     return card
 

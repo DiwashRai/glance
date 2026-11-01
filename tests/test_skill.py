@@ -29,12 +29,12 @@ BUSY = Lists(
 )
 # What each example in --skill says it does, on BUSY: a new example needs a line here
 SAID = {
-    "new reply to Sam's email": "added reply to Sam's email to the queue as p3",
+    "new reply to Sam's email": "added reply to Sam's email to the queue as 3",
     "deep work 2pm for 2h": "planned deep work 14:00-16:00",
     "run 6pm for 1h !": "planned run 18:00-19:00 · must happen today",
     "park stuck on the flaky test": "parked fix the build",
     "wait code review": "waiting on code review",
-    "switch p2": "switched to write the docs",
+    "switch 2": "switched to write the docs",
     "step rerun CI": "added step 3",
     "done": "done: read the trace",
     "skip": "skipped: read the trace",
@@ -44,10 +44,10 @@ SAID = {
     "focus ship the release": "focusing on ship the release",
     "unfocus 1": "unfocused fix the vulnerabilities",
     "unblock 1": "unblocked standup",
-    "rm p2": "removed write the docs ~30m from parked",
-    "new ship the release *": "added ship the release to the queue as p1, starred",
-    "star p2": "starred write the docs ~30m as p1",
-    "unstar": "took the star off review 1129",
+    "rm 2": "removed write the docs ~30m from the queue",
+    "new ship the release *": "added ship the release to the queue as 1, starred",
+    "star 2": "starred write the docs ~30m",
+    "unstar 1": "unstarred review 1129",
 }
 
 

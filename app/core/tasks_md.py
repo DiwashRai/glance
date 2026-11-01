@@ -26,7 +26,7 @@
 - 17:30-18:30 run !
 ```
 
-A lone `*` at the end of a task's line is the star: on one task at most, never on a Quick item.
+A lone `*` at the end of a task's line is its star.
 
 A file that doesn't fit is refused whole, with the line number, rather than guessed at.
 """
@@ -66,7 +66,6 @@ LEFT_OFF = "left off:"
 QUEUED = "queued"  # under a task added with new and never started
 HOME_QUICK = "home: quick"  # under the active task: it came from Quick, and goes back there
 PLAIN = {"focus": "a focus", "quick": "a quick item", "today": "a block"}  # no notes or steps
-NOT_QUICK = "a quick item can't be starred"
 STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
 MARKS: dict[str, StepState] = {" ": "open", "x": "done", "X": "done", ">": "skipped", "-": "left"}
 BOXES: dict[StepState, str] = {"open": " ", "done": "x", "skipped": ">", "left": "-"}
@@ -137,7 +136,6 @@ class _Reader:
         self.quick: list[Task] = []
         self.plan: Plan | NoPlan = NoPlan()
         self.noted = False  # the last task already has its note
-        self.star_seen = False
 
     def lists(self) -> Lists:
         quick = smallest_first(tuple(self.quick))
@@ -210,9 +208,6 @@ class _Reader:
         task = replace(sized(title), starred=starred)
         if not task.title:
             return "a task needs a title"
-        problem = self._star(task)
-        if problem:
-            return problem
         match self.section:
             case "parked":
                 self.parked.append(ParkedTask(task, LeftOff()))
@@ -220,16 +215,6 @@ class _Reader:
                 self.quick.append(task)
             case _:
                 return self._active(task)
-        return ""
-
-    def _star(self, task: Task) -> str:
-        if not task.starred:
-            return ""
-        if self.section == "quick":
-            return NOT_QUICK
-        if self.star_seen:
-            return "only one task can be starred"
-        self.star_seen = True
         return ""
 
     def _active(self, task: Task) -> str:
@@ -282,8 +267,6 @@ class _Reader:
     def _home(self, text: str) -> str:
         """Once is enough: a second `home: quick` finds a FromQuick, not a Task."""
         match self.active:
-            case Task(starred=True) if text.lower() == HOME_QUICK:
-                return NOT_QUICK
             case Task(steps=()) as task if text.lower() == HOME_QUICK:
                 self.active = FromQuick(task)
                 return ""

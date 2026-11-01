@@ -28,11 +28,11 @@ def test_a_line_runs_as_if_typed_then_is_logged(
     assert glance(config, "fix", "the", "build") == 0  # the words, quoted or not
     assert glance_cli.run(["quick reply to Sam", "--config", str(config)], lambda: NOW) == 0
     assert glance(config, "--", "-1 on the RFC") == 0  # a line starting with -
-    assert glance(config, "s", "p2") == 0
+    assert glance(config, "s", "2") == 0
     said = (
-        "added fix the build to the queue as p1 · s p1 to start it\n"
+        "added fix the build to the queue as 1 · s 1 to start it\n"
         "added reply to Sam to quick\n"
-        "added -1 on the RFC to the queue as p2 · s p2 to start it\n"
+        "added -1 on the RFC to the queue as 2 · s 2 to start it\n"
         "switched to -1 on the RFC\n"
     )
     assert capsys.readouterr().out == said

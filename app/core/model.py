@@ -17,7 +17,7 @@ from typing import Literal
 FOCUS_SLOTS = 2
 # A rough size at the end of a title: ~3m, ~1h. On its own (`~5m`) it leaves an empty title.
 SIZE = re.compile(r"(?:\A|\s+)~([1-9][0-9]{0,3})([mh])\Z")
-STAR = "*"  # a lone word at the end of a task's line: the task is today's highlight
+STAR = "*"  # a lone word at the end of a task's line: the task is starred
 STAR_END = re.compile(r"(?:\A|\s+)\*(?:\s+\*)*\Z")
 
 
@@ -35,7 +35,7 @@ class Task:
     title: str
     minutes: int = 0  # its rough size, 0 when none was given
     steps: tuple[Step, ...] = ()  # an ordered checklist, one level deep
-    starred: bool = False  # today's highlight: one at most, never a Quick item
+    starred: bool = False
 
 
 @dataclass(frozen=True)
@@ -287,7 +287,7 @@ class CommandWords:
     new: tuple[str, ...] = ("new", "+")
     park: tuple[str, ...] = ("park", "pause", "shelve", "defer")
     wait: tuple[str, ...] = ("wait",)
-    switch: tuple[str, ...] = ("switch", "s")
+    switch: tuple[str, ...] = ("switch", "s", "do")
     done: tuple[str, ...] = ("done", "d")
     focus: tuple[str, ...] = ("focus",)
     unfocus: tuple[str, ...] = ("unfocus",)
