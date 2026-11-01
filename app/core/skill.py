@@ -25,6 +25,9 @@ EXAMPLES = (
     ("unfocus 1", "take Focus 1 off"),
     ("unblock 1", "take today's block 1 off"),
     ("rm p2", "take a row off Focus, Parked or Quick: f1, p1 or q1"),
+    ("new ship the release *", "add a task as today's highlight, at p1"),
+    ("star p2", "make p2 today's highlight and move it to p1; star alone is the active task"),
+    ("unstar", "take the star off"),
 )
 SKILL = """\
 glance: the owner's working memory
@@ -60,6 +63,8 @@ name: the owner can then answer you from glance.
 - Times: 2pm, 2:30pm, 14:00, noon, evening. A bare 9 is 9am, or 9pm once 9am has gone. Lengths:
   30m, 1h, 1h30m. Blocks are for today only, and a newer one cuts back any it lands on.
 - Steps in the lists: [x] done, [ ] open, [>] skipped, [-] skipped twice.
+- A * after a task is the star: the one thing that would make the owner's day a success. One task
+  has it at a time, and never a Quick item. star <words> that match no task adds a task.
 - Removing, finishing and ticking off can't be undone: do them when the owner asks.
 - If glance says a tasks.md line is wrong, tell the owner: don't fix the file.
 """

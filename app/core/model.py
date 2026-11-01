@@ -17,6 +17,8 @@ from typing import Literal
 FOCUS_SLOTS = 2
 # A rough size at the end of a title: ~3m, ~1h. On its own (`~5m`) it leaves an empty title.
 SIZE = re.compile(r"(?:\A|\s+)~([1-9][0-9]{0,3})([mh])\Z")
+STAR = "*"  # a lone word at the end of a task's line: the task is today's highlight
+STAR_END = re.compile(r"(?:\A|\s+)\*(?:\s+\*)*\Z")
 
 
 StepState = Literal["open", "done", "skipped", "left"]  # left: skipped twice, not come back to
@@ -33,6 +35,7 @@ class Task:
     title: str
     minutes: int = 0  # its rough size, 0 when none was given
     steps: tuple[Step, ...] = ()  # an ordered checklist, one level deep
+    starred: bool = False  # today's highlight: one at most, never a Quick item
 
 
 @dataclass(frozen=True)
@@ -113,9 +116,23 @@ def sized(text: str) -> Task:
             return Task(text)
 
 
+def star_off(text: str) -> tuple[str, bool]:
+    """The text with every lone `*` taken off its end, and whether there was one. Every way in for
+    a task's text comes through here before `sized`, so no title can end in a lone `*`: tasks.md
+    would read it back as the star. A size after it is safe (`fix * ~1h`), as nothing removes a
+    size."""
+    title, stars = STAR_END.subn("", text)
+    return title, bool(stars)
+
+
 def shown(task: Task) -> str:
-    """The title with its size, as it's written in tasks.md and shown."""
+    """The title with its size, as messages and rows show it."""
     return " ".join(part for part in (task.title, size_text(task)) if part)
+
+
+def marked(task: Task) -> str:
+    """As it's written in tasks.md and printed by `glance`: with its star, if it has one."""
+    return f"{shown(task)} {STAR}" if task.starred else shown(task)
 
 
 def working(active: Task | FromQuick | Idle) -> Task | Idle:
@@ -203,7 +220,7 @@ class NoPlan:
 @dataclass(frozen=True)
 class Lists:
     active: Task | FromQuick | Idle = Idle()
-    parked: tuple[ParkedTask, ...] = ()  # parking puts a task on top, new tasks go last
+    parked: tuple[ParkedTask, ...] = ()  # parking or starring puts a task on top, new ones go last
     focus: tuple[str, ...] = ()  # at most FOCUS_SLOTS, oldest first
     quick: tuple[Task, ...] = ()  # smallest first
     plan: Plan | NoPlan = NoPlan()
@@ -224,6 +241,8 @@ EventKind = Literal[
     "skipped",
     "planned",  # a block added to today's plan
     "unplanned",
+    "starred",
+    "unstarred",
 ]
 
 
@@ -278,5 +297,7 @@ class CommandWords:
     finish: tuple[str, ...] = ("finish",)
     unblock: tuple[str, ...] = ("unblock",)
     remove: tuple[str, ...] = ("rm",)
+    star: tuple[str, ...] = ("star",)
+    unstar: tuple[str, ...] = ("unstar",)
     # Not command words: the agents a line starting with one space goes to, then two or more
     agents: tuple[str, ...] = ("assistant", "chief")

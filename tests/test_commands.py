@@ -18,9 +18,11 @@ from app.core.commands import (
     Rejected,
     Remove,
     Skip,
+    Star,
     Switch,
     Typed,
     Unfocus,
+    Unstar,
     apply,
     parse_command,
     preview,
@@ -86,6 +88,9 @@ def applied(lists: Lists, text: str) -> Applied:
         ("step rerun CI", AddStep("rerun CI")),
         (">", Skip()),
         ("finish", Finish()),
+        ("star", Star()),
+        ("STAR p3", Star("p3")),
+        ("unstar", Unstar()),
         ("hello there", Typed("hello there")),
         (" what's next?", Ask("assistant", "what's next?")),
         ("  ask backend", Ask("chief", "ask backend")),
@@ -435,3 +440,216 @@ def test_parking_and_coming_back_keeps_the_steps_and_the_place() -> None:
     assert messages[-1].endswith(" · on b · 2/2")
     _, messages = said(lists, "done", "park", "s 1")
     assert messages[-1].endswith(" · all 2 steps done")
+
+
+STARRED_FIX = Task("fix the build", starred=True)
+OTHER = ParkedTask(Task("tidy logging config"), LeftOff("half done"))
+HELD = ParkedTask(Task("1129 reset flow", starred=True), Waiting("review"))
+UNHELD = ParkedTask(Task("1129 reset flow"), Waiting("review"))
+
+
+def starred_titles(lists: Lists) -> list[str]:
+    match lists.active:
+        case Task(starred=True, title=title):
+            active = [title]
+        case _:
+            active = []
+    return [*active, *(item.task.title for item in lists.parked if item.task.starred)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["new fix the build *", "fix the build *", "+ fix the build  * ", "new fix the build * *"],
+)
+def test_a_lone_star_at_the_end_adds_a_starred_task_at_p1(text: str) -> None:
+    result = applied(Lists(Idle(), (OTHER,)), text)
+    assert result.lists.parked == (ParkedTask(STARRED_FIX, Queued()), OTHER)
+    assert result.events == (
+        Event(NOW, "added", "fix the build", "to the queue"),
+        Event(NOW, "starred", "fix the build"),
+    )
+    assert result.message == "added fix the build to the queue as p1, starred · s p1 to start it"
+    assert parse(render(result.lists)) == result.lists
+
+
+def test_a_size_goes_before_the_star() -> None:
+    assert applied(Lists(), "fix the build ~1h *").lists.parked[0].task == replace(
+        STARRED_FIX, minutes=60
+    )
+
+
+def test_a_star_that_isnt_the_last_word_stays_in_the_title() -> None:
+    assert applied(Lists(), "new fix * now").lists.parked[0].task == Task("fix * now")
+    assert applied(Lists(), "new fix*").lists.parked[0].task == Task("fix*")
+    sized_task = applied(Lists(), "new fix * ~1h").lists
+    assert sized_task.parked[0].task == Task("fix *", 60)
+    assert parse(render(sized_task)) == sized_task
+
+
+@pytest.mark.parametrize("text", ["new *", "*", "* *", "new ~1h *", "star ~1h"])
+def test_a_star_alone_is_no_title(text: str) -> None:
+    assert run(Lists(), text) == Rejected("a task needs a title")
+
+
+def test_a_block_line_with_a_star_after_it_is_a_task() -> None:
+    assert applied(Lists(), "call 2pm for 1h *").lists.parked[0].task == Task(
+        "call 2pm for 1h", starred=True
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "parked"),
+    [
+        ("star p2", (replace(OTHER, task=replace(OTHER.task, starred=True)), UNHELD)),
+        ("star P2", (replace(OTHER, task=replace(OTHER.task, starred=True)), UNHELD)),
+        ("star 2", (replace(OTHER, task=replace(OTHER.task, starred=True)), UNHELD)),
+        ("star tidy", (replace(OTHER, task=replace(OTHER.task, starred=True)), UNHELD)),
+        ("star tidy *", (replace(OTHER, task=replace(OTHER.task, starred=True)), UNHELD)),
+    ],
+)
+def test_starring_moves_the_star_and_the_task_to_p1(
+    text: str, parked: tuple[ParkedTask, ...]
+) -> None:
+    result = applied(Lists(ACTIVE, (HELD, OTHER)), text)
+    assert result.lists == Lists(ACTIVE, parked)
+    assert result.events == (
+        Event(NOW, "unstarred", "1129 reset flow"),
+        Event(NOW, "starred", "tidy logging config"),
+    )
+    assert result.message == (
+        "starred tidy logging config as p1 · took the star off 1129 reset flow"
+    )
+    assert parse(render(result.lists)) == result.lists
+
+
+def test_star_alone_stars_the_active_task_and_it_stays_active() -> None:
+    result = applied(Lists(ACTIVE, (HELD,)), "star")
+    assert result.lists == Lists(replace(ACTIVE, starred=True), (UNHELD,))
+    assert result.message == (
+        "starred 1135 fix token refresh race · took the star off 1129 reset flow"
+    )
+    assert applied(Lists(ACTIVE), "star 1135").lists.active == replace(ACTIVE, starred=True)
+    assert applied(Lists(ACTIVE), "star *").lists.active == replace(ACTIVE, starred=True)
+
+
+def test_starring_takes_the_star_off_the_active_task() -> None:
+    lists = Lists(STARRED_FIX, (OTHER,))
+    result = applied(lists, "star p1")
+    assert result.lists.active == Task("fix the build")
+    assert starred_titles(result.lists) == ["tidy logging config"]
+
+
+def test_starring_the_starred_task_again_keeps_it_and_doesnt_say_it_lost_it() -> None:
+    down = Lists(Idle(), (OTHER, HELD))
+    result = applied(down, "star p2")
+    assert result.lists.parked == (HELD, OTHER)
+    assert result.message == "starred 1129 reset flow as p1"
+    assert applied(Lists(STARRED_FIX), "star").message == "starred fix the build"
+
+
+def test_star_words_that_match_nothing_add_a_starred_task_and_say_so() -> None:
+    result = applied(Lists(ACTIVE, (HELD,)), "star ship the thing ~1h")
+    assert result.lists == Lists(
+        ACTIVE, (ParkedTask(Task("ship the thing", 60, starred=True), Queued()), UNHELD)
+    )
+    assert result.message == (
+        "added ship the thing ~1h to the queue as p1, starred · "
+        "took the star off 1129 reset flow · s p1 to start it"
+    )
+
+
+@pytest.mark.parametrize(
+    ("lists", "text", "reason"),
+    [
+        (Lists(quick=(MERGE,)), "star q1", "quick items can't be starred"),
+        (Lists(quick=(MERGE,)), "star q9", "quick items can't be starred"),
+        (Lists(quick=(MERGE,)), "star merge", "quick items can't be starred"),
+        (Lists(FromQuick(MERGE)), "star", "quick items can't be starred"),
+        (Lists(FromQuick(MERGE)), "star merge", "quick items can't be starred"),
+        (Lists(), "star", "nothing is active"),
+        (Lists(parked=(OTHER,)), "star p9", "there's no p9 in the queue"),
+        (Lists(parked=(OTHER,)), "star 9", "there's no p9 in the queue"),
+        (Lists(), "unstar", "nothing is starred"),
+        (Lists(STARRED_FIX), "unstar now", "unstar takes the star off: type just unstar"),
+    ],
+)
+def test_star_refuses(lists: Lists, text: str, reason: str) -> None:
+    assert run(lists, text) == Rejected(reason)
+
+
+def test_a_number_in_a_title_wins_over_a_row_as_in_switch() -> None:
+    lists = Lists(Idle(), (OTHER, ParkedTask(Task("ticket 1"), Queued())))
+    assert applied(lists, "star 1").lists.parked[0].task == Task("ticket 1", starred=True)
+
+
+def test_star_matching_several_lists_them_across_active_parked_and_quick() -> None:
+    lists = Lists(Task("fix a"), (ParkedTask(Task("fix b"), Queued()),), quick=(Task("fix c"),))
+    assert run(lists, "star fix") == Rejected("'fix' matches 3: p1 fix b, active fix a, q1 fix c")
+
+
+def test_a_number_never_looks_at_quick_and_never_adds_a_task() -> None:
+    lists = Lists(Idle(), (OTHER, UNHELD), quick=(Task("merge 2"),))
+    assert applied(lists, "star 2").lists.parked[0].task == replace(UNHELD.task, starred=True)
+    assert run(lists, "star 3") == Rejected("there's no p3 in the queue")
+    assert run(Lists(quick=(Task("merge 2"),)), "star 2") == Rejected("there's no p2 in the queue")
+
+
+def test_unstar_takes_it_off_wherever_it_is() -> None:
+    result = applied(Lists(Idle(), (HELD,)), "unstar")
+    assert result.lists == Lists(Idle(), (UNHELD,))
+    assert result.events == (Event(NOW, "unstarred", "1129 reset flow"),)
+    assert result.message == "took the star off 1129 reset flow"
+    assert applied(Lists(STARRED_FIX), "unstar").lists.active == Task("fix the build")
+
+
+def test_the_star_stays_with_the_task_through_parking_steps_and_switching() -> None:
+    lists, _ = said(Lists(STARRED_FIX, (OTHER,)), "step a", "done", "park", "s 2", "s 1")
+    assert lists.active == Task("fix the build", steps=(Step("a", "done"),), starred=True)
+    assert starred_titles(lists) == ["fix the build"]
+    assert parse(render(lists)) == lists
+
+
+@pytest.mark.parametrize("text", ["done", "finish"])
+def test_finishing_takes_the_star_with_it(text: str) -> None:
+    assert starred_titles(applied(Lists(STARRED_FIX), text).lists) == []
+
+
+def test_removing_takes_the_star_with_it() -> None:
+    assert starred_titles(applied(Lists(Idle(), (HELD,)), "rm p1").lists) == []
+
+
+@pytest.mark.parametrize("text", ["quick tidy *", "q tidy * *"])
+def test_a_quick_item_never_comes_back_starred(text: str) -> None:
+    added = applied(Lists(), text)
+    assert added.lists.quick == (Task("tidy"),)
+    assert added.message == "added tidy to quick · quick items can't be starred"
+    parked = applied(applied(added.lists, "s q1").lists, "park half done").lists
+    assert parked.parked == (ParkedTask(Task("tidy"), LeftOff("half done")),)
+    assert parse(render(parked)) == parked
+
+
+def test_unstar_leaves_no_star_to_read_back() -> None:
+    lists = applied(applied(Lists(), "new foo * *").lists, "unstar").lists
+    assert lists.parked[0].task == Task("foo")
+    assert parse(render(lists)) == lists
+
+
+def test_a_quick_item_with_a_star_and_nothing_else_has_no_title() -> None:
+    assert run(Lists(), "quick *") == Rejected("quick what? for example: quick merge 1129 ~3m")
+
+
+@pytest.mark.parametrize(
+    ("text", "marks"),
+    [
+        ("fix it *", ((7, 8),)),
+        ("fix it * ", ((7, 8),)),
+        ("fix it * *", ((7, 8), (9, 10))),
+        ("fix * it", ()),
+        ("new fix it *", ((0, 3), (11, 12))),
+        ("star fix", ((0, 4),)),
+        ("star fix *", ((0, 4), (9, 10))),
+        ("quick tidy *", ((0, 5),)),
+    ],
+)
+def test_the_star_is_marked_as_its_typed(text: str, marks: tuple[tuple[int, int], ...]) -> None:
+    assert preview(text, WORDS, Lists(), NOW) == Preview(marks)

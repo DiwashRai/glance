@@ -9,7 +9,7 @@ Active
 Focus
   1  Fix the vulnerabilities
 Parked
-  1  1129 password reset flow · waiting on review
+  1  1129 password reset flow * · waiting on review
   2  Tidy logging config · left off: half done on chore/logging
   3  Bump deps · queued
 Quick
@@ -26,7 +26,17 @@ from collections.abc import Iterable
 from datetime import date
 
 from app.core import blocks
-from app.core.model import FromQuick, Idle, Lists, ParkedTask, Queued, Task, parked_note, shown
+from app.core.model import (
+    FromQuick,
+    Idle,
+    Lists,
+    ParkedTask,
+    Queued,
+    Task,
+    marked,
+    parked_note,
+    shown,
+)
 from app.core.tasks_md import BOXES
 
 NOTHING = "  nothing"
@@ -52,14 +62,14 @@ def _active(active: Task | FromQuick | Idle) -> tuple[str, ...]:
             return (f"  {shown(task)} · from quick",)
         case Task() as task:
             steps = (f"    [{BOXES[step.state]}] {step.text}" for step in task.steps)
-            return (f"  {shown(task)}", *steps)
+            return (f"  {marked(task)}", *steps)
         case Idle():
             return ()
 
 
 def _parked(item: ParkedTask) -> str:
     queued = "queued" if item.reason == Queued() else ""
-    return " · ".join(part for part in (shown(item.task), queued, parked_note(item)) if part)
+    return " · ".join(part for part in (marked(item.task), queued, parked_note(item)) if part)
 
 
 def _numbered(rows: Iterable[str], prefix: str = "") -> tuple[str, ...]:

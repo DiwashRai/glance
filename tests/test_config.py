@@ -32,6 +32,7 @@ data_folder = "data"
 
 [glance.commands]
 park = ["Park", "Later"]
+star = ["Highlight"]
 
 [glance.hud]
 labels = "text"
@@ -42,6 +43,8 @@ labels = "text"
     assert settings.hud == HudSettings(labels="text")
     assert settings.words.park == ("park", "later")
     assert settings.words.new == CommandWords().new
+    assert settings.words.star == ("highlight",)
+    assert settings.words.unstar == CommandWords().unstar
 
 
 @pytest.mark.parametrize(

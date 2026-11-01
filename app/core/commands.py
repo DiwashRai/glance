@@ -14,6 +14,7 @@ from datetime import datetime
 from app.core import blocks, steps
 from app.core.model import (
     FOCUS_SLOTS,
+    STAR,
     Block,
     CommandWords,
     Event,
@@ -32,6 +33,7 @@ from app.core.model import (
     size_text,
     sized,
     smallest_first,
+    star_off,
     step_line,
     where,
     working,
@@ -101,6 +103,16 @@ class Remove:
 
 
 @dataclass(frozen=True)
+class Star:
+    query: str = ""  # a row, a name or a new task's title; empty stars the active task
+
+
+@dataclass(frozen=True)
+class Unstar:
+    extra: str = ""
+
+
+@dataclass(frozen=True)
 class Typed:
     """No command word: a block if it ends in a time and a length, else a new task. The text is
     as it was typed, so the words picked up from it can be shown where they are."""
@@ -117,7 +129,7 @@ class Ask:
     text: str
 
 
-CardCommand = Focus | Unfocus | Remove  # a goal, or a row on a card
+CardCommand = Focus | Unfocus | Remove | Star | Unstar  # a goal, a row on a card, or the star
 StepCommand = AddStep | Skip | Finish  # the active task's steps
 Command = New | Park | Switch | Done | Quick | Unblock | Typed | CardCommand | StepCommand
 
@@ -174,6 +186,8 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
         (words.finish, Finish),
         (words.unblock, Unblock),
         (words.remove, Remove),
+        (words.star, Star),
+        (words.unstar, Unstar),
     )
     for command_words, command in commands:
         if word in command_words:
@@ -189,8 +203,8 @@ def spaces_for(agent: str, words: CommandWords) -> int:
 
 def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Preview:
     """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
-    the command before it runs. A block's time, length and `!` are marked, with what it cuts, and
-    `rm` says what it would remove, as that can't be undone."""
+    the command before it runs. A block's time, length and `!` are marked, with what it cuts, a
+    task's star is marked, and `rm` says what it would remove, as that can't be undone."""
     word = tuple(found.span() for found in blocks.WORD.finditer(text))[:1]
     match parse_command(text, words):
         case Ask(agent=agent):
@@ -203,14 +217,22 @@ def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Prev
                     return Preview(word, f"removes {events[0].title}")
                 case Rejected(reason=reason):
                     return Preview(word, reason)
+        case New() | Star():
+            return Preview((*word, *_star_marks(text)))
         case _:
             return Preview(word)
+
+
+def _star_marks(text: str) -> tuple[tuple[int, int], ...]:
+    """Where the lone `*`s at the end of a typed line are."""
+    title, _ = star_off(text.rstrip())
+    return tuple(found.span() for found in blocks.WORD.finditer(text, len(title)))
 
 
 def _preview_block(lists: Lists, text: str, now: datetime) -> Preview:
     match blocks.typed(text, now.time()):
         case blocks.NotABlock():
-            return Preview()
+            return Preview(_star_marks(text))
         case blocks.Refused(why=why):
             return Preview(note=why)
         case blocks.Found(block=block, marks=marks):
@@ -236,7 +258,7 @@ def apply(lists: Lists, command: Command, now: datetime) -> Applied | Rejected:
             return _switch(lists, query, now)
         case Done(query=query):
             return _done(lists, query, now)
-        case Focus() | Unfocus() | Remove():
+        case Focus() | Unfocus() | Remove() | Star() | Unstar():
             return _card_command(lists, command, now)
         case AddStep() | Skip() | Finish():
             return _step_command(lists, command, now)
@@ -286,10 +308,13 @@ def _and(said: str) -> str:
     return f" · {said}" if said else ""
 
 
-def _new(lists: Lists, title: str, now: datetime) -> Applied | Rejected:
+def _new(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
+    title, starred = star_off(text)
     task = sized(title)
     if not task.title:
         return Rejected("a task needs a title")
+    if starred:
+        return _new_starred(lists, task, now)
     queued = replace(lists, parked=(*lists.parked, ParkedTask(task, Queued())))
     row = f"p{len(queued.parked)}"
     said = f"added {shown(task)} to the queue as {row} · s {row} to start it"
@@ -375,6 +400,10 @@ def _card_command(lists: Lists, command: CardCommand, now: datetime) -> Applied 
             return _unfocus(lists, query, now)
         case Remove(row=row):
             return _remove(lists, row, now)
+        case Star(query=query):
+            return _star(lists, query, now)
+        case Unstar(extra=extra):
+            return _unstar(lists, extra, now)
 
 
 def _remove(lists: Lists, row: str, now: datetime) -> Applied | Rejected:
@@ -420,14 +449,19 @@ def _tick(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
 
 
 def _quick(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
-    task = sized(text)
+    """A `*` is taken off the title and not kept: parked with a note, the title would read back
+    from tasks.md as a starred task."""
+    title, starred = star_off(text)
+    task = sized(title)
     if not task.title:
         return Rejected("quick what? for example: quick merge 1129 ~3m")
     added = replace(lists, quick=smallest_first((*lists.quick, task)))
     event = Event(now, "added", task.title, size_text(task))
-    return Applied(added, (event,), f"added {shown(task)} to quick")
+    refused = NOT_QUICK if starred else ""
+    return Applied(added, (event,), f"added {shown(task)} to quick{_and(refused)}")
 
 
+NOT_QUICK = "quick items can't be starred"
 QUICK_ROW = re.compile(r"[qQ][0-9]+")  # a Quick row as the card labels it: q1, q2…
 PARKED_ROW = re.compile(r"[pP][0-9]+")  # a queue row, as rm names it: p1, p2…
 CARD_ROW = re.compile(r"([fpqFPQ])([0-9]+)")  # for rm: f1 (focus), p1 (parked), q1 (quick)
@@ -575,6 +609,118 @@ def _unfocus(lists: Lists, query: str, now: datetime) -> Applied | Rejected:
                 (Event(now, "unfocused", text),),
                 f"unfocused {text}",
             )
+
+
+def _star(lists: Lists, text: str, now: datetime) -> Applied | Rejected:
+    """`star` is the active task. `star p3` is always that row, and `star q2` is always refused. A
+    number matches a word in a title on Active or Parked, and is otherwise a row, as in `switch`.
+    Other words match across Quick too, and if nothing matches they're a new task, as if typed with
+    `new` and `*`."""
+    query, _ = star_off(text)
+    if not query:
+        return _star_active(lists, now)
+    if QUICK_ROW.fullmatch(query):
+        return Rejected(NOT_QUICK)
+    if PARKED_ROW.fullmatch(query):
+        return _star_row(lists, query[1:], now)
+    tasks, quick = _star_rows(lists)
+    rows = tasks if _is_number(query) else (*tasks, *quick)
+    if any(_matches(query, title) for _, title in rows):
+        return _star_picked(lists, _pick(rows, query, ""), now)
+    if _is_number(query):
+        return _star_row(lists, query, now)
+    return _new(lists, f"{query} {STAR}", now)
+
+
+def _star_rows(
+    lists: Lists,
+) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
+    """Parked then Active, then Quick apart from them: one index runs across all three."""
+    parked = _numbered((item.task.title for item in lists.parked), "p")
+    quick = _numbered((task.title for task in lists.quick), "q")
+    match working(lists.active):
+        case Task(title=title):
+            return (*parked, ("active", title)), quick
+        case Idle():
+            return parked, quick
+
+
+def _star_row(lists: Lists, digits: str, now: datetime) -> Applied | Rejected:
+    refusal = f"there's no p{digits} in the queue"
+    return _star_picked(lists, _row(digits, len(lists.parked), refusal), now)
+
+
+def _star_picked(lists: Lists, picked: _Picked | Rejected, now: datetime) -> Applied | Rejected:
+    tasks, _ = _star_rows(lists)
+    match picked:
+        case Rejected() as rejected:
+            return rejected
+        case _Picked(index=index) if index < len(lists.parked):
+            return _star_parked(lists, index, now)
+        case _Picked(index=index) if index < len(tasks):
+            return _star_active(lists, now)
+        case _Picked():
+            return Rejected(NOT_QUICK)
+
+
+def _star_parked(lists: Lists, index: int, now: datetime) -> Applied:
+    """It goes to p1 and stays parked, with its note. Taken out first, so a task that already has
+    the star isn't told it lost it."""
+    chosen = lists.parked[index]
+    aside = _without_star(replace(lists, parked=_without(lists.parked, index)), now)
+    task = replace(chosen.task, starred=True)
+    moved = replace(aside.lists, parked=(replace(chosen, task=task), *aside.lists.parked))
+    events = (*aside.events, Event(now, "starred", task.title))
+    return Applied(moved, events, f"starred {shown(task)} as p1{_and(aside.message)}")
+
+
+def _star_active(lists: Lists, now: datetime) -> Applied | Rejected:
+    match lists.active:
+        case Idle():
+            return Rejected("nothing is active")
+        case FromQuick():
+            return Rejected(NOT_QUICK)
+        case Task() as task:
+            aside = _without_star(replace(lists, active=Idle()), now)
+            starred = replace(aside.lists, active=replace(task, starred=True))
+            events = (*aside.events, Event(now, "starred", task.title))
+            return Applied(starred, events, f"starred {shown(task)}{_and(aside.message)}")
+
+
+def _new_starred(lists: Lists, task: Task, now: datetime) -> Applied:
+    aside = _without_star(lists, now)
+    new = ParkedTask(replace(task, starred=True), Queued())
+    added = replace(aside.lists, parked=(new, *aside.lists.parked))
+    events = (
+        *aside.events,
+        Event(now, "added", task.title, "to the queue"),
+        Event(now, "starred", task.title),
+    )
+    said = f"added {shown(task)} to the queue as p1, starred{_and(aside.message)}"
+    return Applied(added, events, f"{said} · s p1 to start it")
+
+
+def _unstar(lists: Lists, extra: str, now: datetime) -> Applied | Rejected:
+    if extra:
+        return Rejected("unstar takes the star off: type just unstar")
+    aside = _without_star(lists, now)
+    return aside if aside.events else Rejected("nothing is starred")
+
+
+def _without_star(lists: Lists, now: datetime) -> Applied:
+    """The lists with the star off whichever task has it: the one place that keeps it to one task
+    at a time. Quick items never have it."""
+    held = tuple(item.task for item in lists.parked if item.task.starred)
+    parked = tuple(replace(item, task=replace(item.task, starred=False)) for item in lists.parked)
+    match lists.active:
+        case Task(starred=True) as task:
+            held = (task, *held)
+            cleared = replace(lists, active=replace(task, starred=False), parked=parked)
+        case _:
+            cleared = replace(lists, parked=parked)
+    events = tuple(Event(now, "unstarred", task.title) for task in held)
+    said = " · ".join(f"took the star off {shown(task)}" for task in held)
+    return Applied(cleared, events, said)
 
 
 def _typed(lists: Lists, text: str, now: datetime) -> Applied | Rejected:

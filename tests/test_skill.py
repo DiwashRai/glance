@@ -20,7 +20,7 @@ NOW = datetime(2026, 10, 19, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
 BUSY = Lists(
     active=Task("fix the build", steps=(Step("rerun CI", "done"), Step("read the trace"))),
     parked=(
-        ParkedTask(Task("review 1129"), Waiting("Sam")),
+        ParkedTask(Task("review 1129", starred=True), Waiting("Sam")),
         ParkedTask(Task("write the docs", 30), LeftOff("half done")),
     ),
     focus=("fix the vulnerabilities",),
@@ -45,6 +45,9 @@ SAID = {
     "unfocus 1": "unfocused fix the vulnerabilities",
     "unblock 1": "unblocked standup",
     "rm p2": "removed write the docs ~30m from parked",
+    "new ship the release *": "added ship the release to the queue as p1, starred",
+    "star p2": "starred write the docs ~30m as p1",
+    "unstar": "took the star off review 1129",
 }
 
 

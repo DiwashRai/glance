@@ -10,7 +10,7 @@
 - Fix the vulnerabilities
 
 # Parked
-- 1129 password reset flow
+- 1129 password reset flow *
   waiting on: review
 - Tidy logging config
   left off: half done on chore/logging
@@ -25,6 +25,8 @@
 - 14:00-15:30 deep work
 - 17:30-18:30 run !
 ```
+
+A lone `*` at the end of a task's line is the star: on one task at most, never on a Quick item.
 
 A file that doesn't fit is refused whole, with the line number, rather than guessed at.
 """
@@ -51,9 +53,10 @@ from app.core.model import (
     StepState,
     Task,
     Waiting,
-    shown,
+    marked,
     sized,
     smallest_first,
+    star_off,
 )
 
 HEADINGS = {"# Active": "active", "# Focus": "focus", "# Parked": "parked", "# Quick": "quick"}
@@ -63,6 +66,7 @@ LEFT_OFF = "left off:"
 QUEUED = "queued"  # under a task added with new and never started
 HOME_QUICK = "home: quick"  # under the active task: it came from Quick, and goes back there
 PLAIN = {"focus": "a focus", "quick": "a quick item", "today": "a block"}  # no notes or steps
+NOT_QUICK = "a quick item can't be starred"
 STEP = re.compile(r"- \[([ xX>-])\] ")  # under a task: - [ ] open, [x] done, [>] skipped, [-] left
 MARKS: dict[str, StepState] = {" ": "open", "x": "done", "X": "done", ">": "skipped", "-": "left"}
 BOXES: dict[StepState, str] = {"open": " ", "done": "x", "skipped": ">", "left": "-"}
@@ -91,7 +95,7 @@ def render(lists: Lists) -> str:
 
 
 def _task_line(task: Task) -> str:
-    return f"- {shown(task)}"
+    return f"- {marked(task)}"
 
 
 def _step_lines(task: Task) -> list[str]:
@@ -133,6 +137,7 @@ class _Reader:
         self.quick: list[Task] = []
         self.plan: Plan | NoPlan = NoPlan()
         self.noted = False  # the last task already has its note
+        self.star_seen = False
 
     def lists(self) -> Lists:
         quick = smallest_first(tuple(self.quick))
@@ -192,22 +197,45 @@ class _Reader:
             return "a task needs a title"
         self.noted = False
         match self.section:
-            case "parked":
-                self.parked.append(ParkedTask(sized(text), LeftOff()))
-            case "quick":
-                self.quick.append(sized(text))
             case "focus":
                 return self._focus(text)
             case "today":
                 return self._block(text)
             case _:
-                return self._active(text)
+                return self._listed(text)
+
+    def _listed(self, text: str) -> str:
+        """A line in Active, Parked or Quick, where a lone `*` at the end is the star."""
+        title, starred = star_off(text)
+        task = replace(sized(title), starred=starred)
+        if not task.title:
+            return "a task needs a title"
+        problem = self._star(task)
+        if problem:
+            return problem
+        match self.section:
+            case "parked":
+                self.parked.append(ParkedTask(task, LeftOff()))
+            case "quick":
+                self.quick.append(task)
+            case _:
+                return self._active(task)
         return ""
 
-    def _active(self, text: str) -> str:
+    def _star(self, task: Task) -> str:
+        if not task.starred:
+            return ""
+        if self.section == "quick":
+            return NOT_QUICK
+        if self.star_seen:
+            return "only one task can be starred"
+        self.star_seen = True
+        return ""
+
+    def _active(self, task: Task) -> str:
         match self.active:
             case Idle():
-                self.active = sized(text)
+                self.active = task
                 return ""
             case Task() | FromQuick():
                 return "only one task can be active"
@@ -254,6 +282,8 @@ class _Reader:
     def _home(self, text: str) -> str:
         """Once is enough: a second `home: quick` finds a FromQuick, not a Task."""
         match self.active:
+            case Task(starred=True) if text.lower() == HOME_QUICK:
+                return NOT_QUICK
             case Task(steps=()) as task if text.lower() == HOME_QUICK:
                 self.active = FromQuick(task)
                 return ""

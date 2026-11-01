@@ -18,6 +18,8 @@
 # finish = ["finish"]
 # unblock = ["unblock"]
 # remove = ["rm"]
+# star = ["star"]
+# unstar = ["unstar"]
 
 # [glance.hud]              # the counts on the taskbar (theme and look: the tray menu)
 # labels = "icons"          # "icons": each entry's icon below; "text": its label
