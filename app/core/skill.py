@@ -14,7 +14,7 @@ EXAMPLES = (
     ("run 6pm for 1h !", "the ! means it must happen: a newer block never cuts it"),
     ("park stuck on the flaky test", "park the active task, with an optional note"),
     ("wait code review", "park it, waiting on something"),
-    ("switch p2", "start or resume a queued or Quick task by row (p2, q1) or title word"),
+    ("switch 2", "start or resume a queued or Quick task by row (2, q1) or title word"),
     ("step rerun CI", "add a step to the active task"),
     ("done", "tick the current step; with none open, finish the task"),
     ("skip", "skip the current step"),
@@ -24,7 +24,10 @@ EXAMPLES = (
     ("focus ship the release", "add a Focus goal (two at most)"),
     ("unfocus 1", "take Focus 1 off"),
     ("unblock 1", "take today's block 1 off"),
-    ("rm p2", "take a row off Focus, Parked or Quick: f1, p1 or q1"),
+    ("rm 2", "take a row off the queue, Focus or Quick: 1, f1 or q1"),
+    ("new ship the release *", "add a starred task, at the top of the queue"),
+    ("star 2", "star queue row 2 and move it to the top; star alone is the active task"),
+    ("unstar 1", "take the star off row 1; unstar alone is the active task"),
 )
 SKILL = """\
 glance: the owner's working memory
@@ -55,11 +58,13 @@ name: the owner can then answer you from glance.
 - Single quotes, with any ' inside doubled: in double quotes PowerShell changes $ and `.
 - A line with no command word plans a block if it ends in a time and a length, and otherwise
   adds a task to the queue. So add tasks as above, and check the reply says what you meant.
-- Numbers move as the lists change: run `glance` just before using one. In switch, a bare number
-  matches a word in a title (1129) before a row, so switch by row (p2, q1) or a title word.
+- Numbers move as the lists change: run `glance` just before using one. A number on its own is
+  always a queue row.
 - Times: 2pm, 2:30pm, 14:00, noon, evening. A bare 9 is 9am, or 9pm once 9am has gone. Lengths:
   30m, 1h, 1h30m. Blocks are for today only, and a newer one cuts back any it lands on.
 - Steps in the lists: [x] done, [ ] open, [>] skipped, [-] skipped twice.
+- A * after a task is a star: something the owner wants to keep in mind today. Any number of tasks
+  can have one. star <words> adds a new starred task.
 - Removing, finishing and ticking off can't be undone: do them when the owner asks.
 - If glance says a tasks.md line is wrong, tell the owner: don't fix the file.
 """

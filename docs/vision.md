@@ -71,6 +71,10 @@ Parked in more detail:
 - Parked tasks come back in the morning routine and whenever Active is empty.
 - After about a week untouched, glance asks "keep or drop?".
 
+Stars mark what I want to keep in mind today. Any number of tasks can have one, and it stays until it's unstarred or
+the task is finished: glance is working memory, and the real record lives elsewhere. A filled yellow star replaces the
+marker on a queue row, and follows the flame on Active.
+
 The time side:
 
 | List | What it holds |
@@ -80,7 +84,7 @@ The time side:
 
 Glance keeps its own files for these lists (see Data). Task titles stay short at work ("do ticket
 1135"); the detail lives in Jira, GitHub and so on. Adding a new task leaves the active one alone
-and says where the new one went ("added fix the build to the queue as p4 · s p4 to start it").
+and says where the new one went ("added fix the build to the queue as 4 · s 4 to start it").
 
 ## Steps
 
@@ -110,8 +114,10 @@ As I type, the words glance picked up are coloured, so I can see what it will do
 |---|---|
 | `park <note>` (also `pause`, `shelve`, `defer`) | Park the active task with a "left off" note |
 | `wait <reason>` | Park the active task as blocked on something |
-| `switch <name or row>` (or `s`) | Make a parked task active (`s p2`); the current one is parked on top |
-| `<title>`, or `new <title>` (or `+`) | Add a task to the bottom of Parked; the active task is left alone |
+| `switch <name or row>` (or `s`, `do`) | Make a parked task active (`s 2`); the current one is parked on top. A number on its own is always a queue row |
+| `<title>`, or `new <title>` (or `+`) | Add a task to the bottom of Parked; the active task is left alone. A lone `*` at the end stars it and puts it at the top |
+| `star` / `star 3` / `star <title>` | Star the active task, or queue row 3, which moves to the top. Words add a new starred task |
+| `unstar` / `unstar 3` | Take the star off the active task or queue row 3 |
 | `done` (or `d`) | Finish the current step, or the task if it has no steps. `done q2` ticks off a Quick item without starting it |
 | `skip` (or `>`) | Skip the current step; skipped steps come back round once |
 | `finish` | Finish the active task now, whatever its steps |
@@ -121,7 +127,7 @@ As I type, the words glance picked up are coloured, so I can see what it will do
 | `unfocus <name or number>` | Take something out of Focus |
 | `<what> <time> for <length>` | Plan a block today: `deep work 2pm for 2h`, or `call for 30m 9` (the next 9 o'clock). `!` at the end marks it must-happen. It cuts back any block it lands on, except a must-happen one |
 | `unblock <name or number>` | Take a block off today's plan |
-| `rm f1` / `rm p1` / `rm q1` | Take a row off Focus, Parked or Quick without starting or finishing it, by row only |
+| `rm 1` / `rm f1` / `rm q1` | Take a row off the queue, Focus or Quick without starting or finishing it, by row only |
 
 Keys in the overlay and on drop cards:
 
@@ -279,7 +285,7 @@ https://claude.ai/artifact/74pBpUYyeYhkLdDXNPL8yX. The nudge prototypes are on t
 - The text box is in the middle. The priority lists are stacked cards on the left. The time side
   (Today, Quick) is on the right. Everything sits toward the centre, not the screen edges.
 - While I type, the side my command affects lights up and the rest fades.
-- Active sits right above the text box: normal-size text, an orange border and a small flame.
+- Active sits right above the text box: normal-size text, an orange border and a small flame, then a star if it has one.
 - Making a task active or parking it is animated, so I can see it move to Parked. Small enjoyable
   details make me more likely to keep using it.
 - **Tactile feel is the secret ingredient.** Tasks should feel like physical objects slotting in and
@@ -310,7 +316,7 @@ Plain files on each machine, kept out of OneDrive-synced folders:
 
 - `tasks.md`: the lists (Active, Focus, Parked with notes and waiting-on reasons), steps, Quick
   items and today's planned blocks (under `# Today 2026-10-18`; another day's are ignored), as
-  plain Markdown that I or an agent can read and edit. Glance rewrites it in a fixed
+  plain Markdown that I or an agent can read and edit. A lone ` *` at the end of a task's line is its star. Glance rewrites it in a fixed
   form after every command, saves it safely (write a temp file, then swap it in), refuses a file
   it can't read rather than guessing, and notices when it was edited outside glance.
 - `events.log`: a running log of what happened (started, parked, finished, check-in answered,

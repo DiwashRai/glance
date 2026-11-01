@@ -8,7 +8,7 @@
 # new = ["new", "+"]
 # park = ["park", "pause", "shelve", "defer"]
 # wait = ["wait"]
-# switch = ["switch", "s"]
+# switch = ["switch", "s", "do"]
 # done = ["done", "d"]
 # focus = ["focus"]
 # unfocus = ["unfocus"]
@@ -18,6 +18,8 @@
 # finish = ["finish"]
 # unblock = ["unblock"]
 # remove = ["rm"]
+# star = ["star"]
+# unstar = ["unstar"]
 
 # [glance.hud]              # the counts on the taskbar (theme and look: the tray menu)
 # labels = "icons"          # "icons": each entry's icon below; "text": its label

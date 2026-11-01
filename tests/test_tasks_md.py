@@ -1,6 +1,17 @@
 import pytest
 
-from app.core.model import FromQuick, Idle, LeftOff, Lists, ParkedTask, Problem, Step, Task, Waiting
+from app.core.model import (
+    FromQuick,
+    Idle,
+    LeftOff,
+    Lists,
+    ParkedTask,
+    Problem,
+    Queued,
+    Step,
+    Task,
+    Waiting,
+)
 from app.core.tasks_md import parse, render
 
 EXAMPLE = """\
@@ -65,6 +76,27 @@ ODD = f"a{chr(0x2028)}b{chr(0x0C)}c"  # characters str.splitlines() would split 
             "# Active\n- reply ~5m\n  home: quick\n\n# Focus\n\n# Parked\n\n# Quick\n",
             Lists(FromQuick(Task("reply", 5))),
         ),
+        (
+            "# Active\n- fix ~1h *\n  - [ ] s\n\n# Focus\n\n# Parked\n\n# Quick\n",
+            Lists(Task("fix", 60, (Step("s"),), starred=True)),
+        ),
+        (
+            "# Active\n\n# Focus\n\n# Parked\n- a *\n  waiting on: Sam\n\n# Quick\n",
+            Lists(parked=(ParkedTask(Task("a", starred=True), Waiting("Sam")),)),
+        ),
+        (  # a size after a `*` keeps it in the title, and a star can follow the size
+            "# Active\n\n# Focus\n\n# Parked\n- a * ~1h\n  queued\n- b * ~1h *\n\n# Quick\n",
+            Lists(
+                parked=(
+                    ParkedTask(Task("a *", 60), Queued()),
+                    ParkedTask(Task("b *", 60, starred=True), LeftOff()),
+                )
+            ),
+        ),
+        (  # only tasks have stars: a goal or a block may end in one, and "a*" isn't one
+            "# Active\n- a*\n\n# Focus\n- b *\n\n# Parked\n\n# Quick\n",
+            Lists(Task("a*"), focus=("b *",)),
+        ),
     ],
 )
 def test_round_trips_exactly(text: str, lists: Lists) -> None:
@@ -90,6 +122,7 @@ def test_round_trips_exactly(text: str, lists: Lists) -> None:
             "# Parked\n- a\n  - [X] s\n  waiting on: CI\n",
             Lists(parked=(ParkedTask(Task("a", steps=(Step("s", "done"),)), Waiting("CI")),)),
         ),
+        ("# Parked\n- a * *\n", Lists(parked=(ParkedTask(Task("a", starred=True), LeftOff()),))),
     ],
 )
 def test_reads_hand_edits_leniently(text: str, lists: Lists) -> None:
@@ -123,6 +156,8 @@ def test_reads_hand_edits_leniently(text: str, lists: Lists) -> None:
         ("# Parked\n* a\n", 2, "glance can't read this line"),
         ("# Focus\n- a\n- b\n- c\n", 4, "focus holds at most 2"),
         ("# Focus\n- a\n  left off: x\n", 3, "a focus can't have a note"),
+        ("# Parked\n- *\n", 2, "a task needs a title"),
+        ("# Parked\n- ~5m *\n", 2, "a task needs a title"),
     ],
 )
 def test_refuses_what_it_cant_read_with_the_line(text: str, line: int, message: str) -> None:

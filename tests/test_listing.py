@@ -52,6 +52,12 @@ def test_each_list_is_numbered_the_way_commands_count_it() -> None:
     )
 
 
+def test_the_star_is_printed_as_tasks_md_has_it() -> None:
+    parked = Lists(parked=(ParkedTask(Task("tidy logs", 30, starred=True), Waiting("Sam")),))
+    assert "  1  tidy logs ~30m * · waiting on Sam\n" in listing(parked, TODAY)
+    assert "Active\n  fix *\nFocus" in listing(Lists(Task("fix", starred=True)), TODAY)
+
+
 def test_an_empty_list_says_so_and_another_days_plan_is_left_out() -> None:
     yesterday = Plan(date(2026, 10, 18), (STANDUP,))
     lists = Lists(FromQuick(Task("merge 1129", 3)), plan=yesterday)

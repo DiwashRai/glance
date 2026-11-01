@@ -91,8 +91,9 @@ class Elided(QLabel):
 
 
 class ActiveCard(QFrame):
-    """Orange, with a flame, when a task is active. A dashed empty slot when nothing is. The same
-    height either way, so the text box under it never moves."""
+    """Orange, with a flame, when a task is active, and a star after the flame if it's starred. A
+    dashed empty slot when nothing is. The same height either way, so the text box under it never
+    moves."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -106,6 +107,9 @@ class ActiveCard(QFrame):
         flame = QLabel()
         flame.setPixmap(icons.pixmap(icons.FLAME, theme.ORANGE, 14))
         top.addWidget(flame)
+        self.star = QLabel()
+        self.star.setPixmap(icons.pixmap(icons.STAR, theme.YELLOW, 14))
+        top.addWidget(self.star)
         top.addWidget(header("Active", "active-header"))
         self.step = Elided("dim", 13)  # where it's up to: "rerun CI · 2/4"
         self.step.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -127,6 +131,7 @@ class ActiveCard(QFrame):
             case Task() as task:
                 self.title.show_text(shown(task))
                 self.step.show_text(step_line(task))
+                self.star.setVisible(task.starred)
                 self._mode("active", working=True)
             case Idle():
                 self._mode("idle", working=False)
@@ -248,7 +253,7 @@ class ListCard(QFrame):
 def parked_card() -> ListCard:
     """Queue rows, parked first and new last."""
     corner = "parked on top · new at the bottom"
-    card = ListCard("Queue", corner, "nothing queued", "s p<n> to start")
+    card = ListCard("Queue", corner, "nothing queued", "s <n> to start")
     card.setFixedWidth(340)
     return card
 
@@ -289,7 +294,10 @@ def _row(number: int, parked: ParkedTask) -> QWidget:
     top = QHBoxLayout()
     top.setSpacing(8)
     marker = QLabel()
-    marker.setPixmap(_marker(parked.reason))
+    starred = parked.task.starred
+    marker.setPixmap(
+        icons.pixmap(icons.STAR, theme.YELLOW, 12) if starred else _marker(parked.reason)
+    )
     title = Elided("title", 14)
     title.show_text(shown(parked.task))
     top.addWidget(marker)

@@ -24,11 +24,11 @@ Glance has two parts:
 
 | Command | Does |
 |---|---|
-| `<title>` (or `new <title>`, `+`) | Add a task to the bottom of the queue (the Parked list); Active is left alone. Use `new` for a title that starts with a command word (`new wait for Sam`) |
+| `<title>` (or `new <title>`, `+`) | Add a task to the bottom of the queue (the Parked list); Active is left alone. Use `new` for a title that starts with a command word (`new wait for Sam`). A lone `*` at the end stars it and puts it at the top |
 | `<what> 2pm for 1h` | Plan a block of time today: `deep work 9 for 2h` (the next 9 o'clock), `call for 30m 14:30`. Times: `2pm`, `14:30`, `noon`, `evening`. Lengths: `30m`, `90m`, `1h30m`. `!` at the end: it must happen. A block cuts back any it lands on, whatever their names. A line that doesn't end exactly like this is a task |
 | `park <note>` (or `pause`, `shelve`, `defer`) | Park the active task, with an optional "left off" note |
 | `wait <what>` | Park the active task as waiting on something |
-| `switch <title or row>` (or `s`) | Make a queued task active (`s p2`), or a Quick item (`s q2`). The active one is parked on top |
+| `switch <title or row>` (or `s`, `do`) | Make a queued task active (`s 2`), or a Quick item (`s q2`). The active one is parked on top. A number on its own is always a queue row |
 | `done` (or `d`) | Tick off the current step, or finish the task if it has none. `done q2` ticks off a Quick item |
 | `step <text>` | Add a step to the active task |
 | `skip` (or `>`) | Skip the current step; skipped steps come back round once |
@@ -37,7 +37,9 @@ Glance has two parts:
 | `unfocus <name or number>` | Take a goal out of Focus |
 | `quick <text> ~5m` (or `q`) | Add something small to do while you wait; the size is optional |
 | `unblock <name or number>` | Take a block off today's plan |
-| `rm f1` / `rm p1` / `rm q1` | Take a row off Focus, Parked or Quick without starting it or finishing it. By row only |
+| `rm 1` / `rm f1` / `rm q1` | Take a row off the queue, Focus or Quick without starting it or finishing it. By row only |
+| `star` / `star 3` / `star <title>` | Star the active task, or queue row 3, which moves to the top. Words add a new starred task |
+| `unstar` / `unstar 3` | Take the star off the active task or queue row 3 |
 
 As you type, the words glance picked up turn blue (a block's time and length, or a command word),
 and a note on the right says which blocks a new one cuts back. No blue means it'll be a task.

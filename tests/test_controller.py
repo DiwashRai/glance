@@ -38,7 +38,7 @@ def test_a_command_is_saved_then_shown_then_logged(tmp_path: Path) -> None:
     Store(tmp_path).save(Lists(parked=(ParkedTask(Task("fix the build"), Queued()),)))
     glance = controller(tmp_path)
     glance.open()
-    view = glance.run("s p1")
+    view = glance.run("s 1")
     said = "switched to fix the build"
     assert view == View(Lists(Task("fix the build"), ()), said, accepted=True)
     assert controller(tmp_path).open().lists == view.lists  # saved: a fresh start sees it

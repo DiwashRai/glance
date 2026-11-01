@@ -10,7 +10,7 @@
 - Fix the vulnerabilities
 
 # Parked
-- 1129 password reset flow
+- 1129 password reset flow *
   waiting on: review
 - Tidy logging config
   left off: half done on chore/logging
@@ -25,6 +25,8 @@
 - 14:00-15:30 deep work
 - 17:30-18:30 run !
 ```
+
+A lone `*` at the end of a task's line is its star.
 
 A file that doesn't fit is refused whole, with the line number, rather than guessed at.
 """
@@ -51,9 +53,10 @@ from app.core.model import (
     StepState,
     Task,
     Waiting,
-    shown,
+    marked,
     sized,
     smallest_first,
+    star_off,
 )
 
 HEADINGS = {"# Active": "active", "# Focus": "focus", "# Parked": "parked", "# Quick": "quick"}
@@ -91,7 +94,7 @@ def render(lists: Lists) -> str:
 
 
 def _task_line(task: Task) -> str:
-    return f"- {shown(task)}"
+    return f"- {marked(task)}"
 
 
 def _step_lines(task: Task) -> list[str]:
@@ -192,22 +195,32 @@ class _Reader:
             return "a task needs a title"
         self.noted = False
         match self.section:
-            case "parked":
-                self.parked.append(ParkedTask(sized(text), LeftOff()))
-            case "quick":
-                self.quick.append(sized(text))
             case "focus":
                 return self._focus(text)
             case "today":
                 return self._block(text)
             case _:
-                return self._active(text)
+                return self._listed(text)
+
+    def _listed(self, text: str) -> str:
+        """A line in Active, Parked or Quick, where a lone `*` at the end is the star."""
+        title, starred = star_off(text)
+        task = replace(sized(title), starred=starred)
+        if not task.title:
+            return "a task needs a title"
+        match self.section:
+            case "parked":
+                self.parked.append(ParkedTask(task, LeftOff()))
+            case "quick":
+                self.quick.append(task)
+            case _:
+                return self._active(task)
         return ""
 
-    def _active(self, text: str) -> str:
+    def _active(self, task: Task) -> str:
         match self.active:
             case Idle():
-                self.active = sized(text)
+                self.active = task
                 return ""
             case Task() | FromQuick():
                 return "only one task can be active"

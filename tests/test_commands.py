@@ -18,9 +18,11 @@ from app.core.commands import (
     Rejected,
     Remove,
     Skip,
+    Star,
     Switch,
     Typed,
     Unfocus,
+    Unstar,
     apply,
     parse_command,
     preview,
@@ -75,6 +77,7 @@ def applied(lists: Lists, text: str) -> Applied:
         ("shelve", Park(LeftOff())),
         ("wait CI run", Park(Waiting("CI run"))),
         ("s 1129", Switch("1129")),
+        ("do 2", Switch("2")),
         ("d", Done()),
         ("done 1129", Done("1129")),
         ("new\tfix  the   build ", New("fix the build")),
@@ -82,10 +85,13 @@ def applied(lists: Lists, text: str) -> Applied:
         ("unfocus 2", Unfocus("2")),
         ("q merge 1129 ~3m", Quick("merge 1129 ~3m")),
         ("done q2", Done("q2")),
-        ("RM p2", Remove("p2")),
+        ("RM 2", Remove("2")),
         ("step rerun CI", AddStep("rerun CI")),
         (">", Skip()),
         ("finish", Finish()),
+        ("star", Star()),
+        ("STAR 3", Star("3")),
+        ("unstar", Unstar()),
         ("hello there", Typed("hello there")),
         (" what's next?", Ask("assistant", "what's next?")),
         ("  ask backend", Ask("chief", "ask backend")),
@@ -124,9 +130,9 @@ NEW = ParkedTask(Task("fix the build"), Queued())
 @pytest.mark.parametrize(
     ("lists", "message"),
     [
-        (Lists(), "added fix the build to the queue as p1 · s p1 to start it"),
-        (DAY, "added fix the build to the queue as p3 · s p3 to start it"),
-        (IDLE_DAY, "added fix the build to the queue as p3 · s p3 to start it"),
+        (Lists(), "added fix the build to the queue as 1 · s 1 to start it"),
+        (DAY, "added fix the build to the queue as 3 · s 3 to start it"),
+        (IDLE_DAY, "added fix the build to the queue as 3 · s 3 to start it"),
     ],
 )
 def test_new_goes_to_the_bottom_of_the_queue_and_leaves_active_alone(
@@ -142,7 +148,7 @@ def test_new_goes_to_the_bottom_of_the_queue_and_leaves_active_alone(
 
 def test_a_queued_task_starts_by_its_row_and_comes_back_on_top_once_parked() -> None:
     queued = applied(DAY, "new fix the build").lists
-    started = applied(queued, "s p3")
+    started = applied(queued, "s 3")
     assert started.lists == Lists(NEW.task, (ParkedTask(ACTIVE, LeftOff()), WAITING, LEFT))
     assert started.message == f"switched to fix the build · parked {ACTIVE.title}"
     assert applied(started.lists, "park").lists.parked[0] == ParkedTask(NEW.task, LeftOff())
@@ -188,7 +194,7 @@ def test_done_finishes_the_active_task() -> None:
         ),
         (
             IDLE_DAY,
-            "s 1129",
+            "s 1",
             Lists(WAITING.task, (LEFT,)),
             f"switched to {WAITING.task.title} · was waiting on review",
         ),
@@ -201,22 +207,6 @@ def test_switch_parks_the_active_task_and_says_where_i_was(
     assert result.lists == after
     assert result.events[-1].kind == "resumed"
     assert result.message == message
-
-
-@pytest.mark.parametrize(
-    ("lists", "query", "picked"),
-    [
-        (DAY, "1129", WAITING.task),  # a ticket number in a title
-        (DAY, "2", LEFT.task),  # "1129" has a 2 in it, but not as a word: so position 2
-        (
-            Lists(Idle(), (LEFT, ParkedTask(Task("step 1 of the plan"), LeftOff()))),
-            "1",
-            Task("step 1 of the plan"),
-        ),
-    ],
-)
-def test_switch_matches_a_title_before_a_position(lists: Lists, query: str, picked: Task) -> None:
-    assert applied(lists, f"s {query}").lists.active == picked
 
 
 GOALS = ("fix the vulnerabilities", "migrate the build")
@@ -240,7 +230,7 @@ def test_unfocus_removes_one_by_its_number_on_the_card() -> None:
     )
 
 
-@pytest.mark.parametrize("text", ["new a", "park", "wait CI", "s 1129", "done"])
+@pytest.mark.parametrize("text", ["new a", "park", "wait CI", "s 1", "done"])
 def test_focus_stays_put_whatever_happens_to_tasks(text: str) -> None:
     assert applied(FOCUSED, text).lists.focus == GOALS
 
@@ -262,7 +252,7 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (
             DAY,
             f"s {'9' * 5000}",
-            f"no parked task matches '{'9' * 5000}' (quick items: s q<number>)",
+            f"there's no {'9' * 5000} in the queue",
         ),
         (DAY, "s q0000001", "there's no q0000001 in quick"),
         (DAY, "quick ~5m", "quick what? for example: quick merge 1129 ~3m"),
@@ -270,8 +260,8 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "done 1129", "done ticks the current step; done q<number> ticks off a quick item"),
         (DAY, "done q1", "there's no q1 in quick"),
         (DAY, "s q1", "there's no q1 in quick"),
-        (DAY, "s p3", "there's no p3 in the queue"),
-        (DAY, "s P0", "there's no p0 in the queue"),
+        (DAY, "s 3", "there's no 3 in the queue"),
+        (DAY, "s 0", "there's no 0 in the queue"),
         (DAY, "quick", "quick what? for example: quick merge 1129 ~3m"),
         (DAY, "focus", "focus on what?"),
         (FOCUSED, "focus a third", "focus is full: unfocus one first, by number or name"),
@@ -282,8 +272,8 @@ TWINS = Lists(Idle(), (ParkedTask(Task("same"), LeftOff()), ParkedTask(Task("sam
         (DAY, "skip", "no steps to skip · step <text> adds one"),
         (DAY, "skip it", "skip moves past the current step: type just skip"),
         (DAY, "finish now", "finish finishes the active task: type just finish"),
-        (DAY, "rm 1129", "rm f1, p1 or q1"),
-        (DAY, "rm p3", "there's no p3 in parked"),
+        (DAY, "rm fix", "rm 1, f1 or q1"),
+        (DAY, "rm 3", "there's no 3 in the queue"),
         (DAY, "rm q1", "there's no q1 in quick"),
         (DAY, "rm f1", "no focus matches '1'"),
     ],
@@ -313,7 +303,7 @@ def test_done_ticks_off_a_quick_item_without_making_it_active() -> None:
 @pytest.mark.parametrize(
     ("text", "left", "event", "said"),
     [
-        ("rm p2", replace(QUICK_DAY, parked=(WAITING,)), "tidy logging config", "parked"),
+        ("rm 2", replace(QUICK_DAY, parked=(WAITING,)), "tidy logging config", "the queue"),
         ("rm Q1", replace(QUICK_DAY, quick=(REPLY,)), "merge 1129", "quick"),
     ],
 )
@@ -329,10 +319,9 @@ def test_rm_takes_a_row_off_its_card_and_leaves_the_rest(
 
 @pytest.mark.parametrize(
     ("text", "note"),
-    [("rm p2", "removes tidy logging config"), ("rm q9", "there's no q9 in quick")],
+    [("rm 2", "removes tidy logging config"), ("rm q9", "there's no q9 in quick")],
 )
 def test_rm_says_what_it_would_remove_before_enter(text: str, note: str) -> None:
-    """It can't be undone, and the cards number Parked 1, 2…, not p1, p2…"""
     assert preview(text, WORDS, QUICK_DAY, NOW) == Preview(((0, 2),), note)
 
 
@@ -361,8 +350,8 @@ ROADMAP = Task("review Q2 roadmap", 3)
             "s Q2",
             FromQuick(REPLY),
         ),
-        # p2 is always Parked row 2, even when another title has "p2" in it
-        (Lists(parked=(ParkedTask(Task("ship p2"), LeftOff()), LEFT)), "s p2", LEFT.task),
+        # 2 is always queue row 2, even when another title has a 2 in it
+        (Lists(parked=(ParkedTask(Task("ship 2"), LeftOff()), LEFT)), "s 2", LEFT.task),
         # a number only looks at Parked, whose rows are numbered
         (Lists(parked=(LEFT, WAITING), quick=(Task("merge 2"),)), "s 2", WAITING.task),
     ],
@@ -435,3 +424,133 @@ def test_parking_and_coming_back_keeps_the_steps_and_the_place() -> None:
     assert messages[-1].endswith(" · on b · 2/2")
     _, messages = said(lists, "done", "park", "s 1")
     assert messages[-1].endswith(" · all 2 steps done")
+
+
+STARRED_FIX = Task("fix the build", starred=True)
+OTHER = ParkedTask(Task("tidy logging config"), LeftOff("half done"))
+HELD = ParkedTask(Task("1129 reset flow", starred=True), Waiting("review"))
+UNHELD = ParkedTask(Task("1129 reset flow"), Waiting("review"))
+
+
+def starred_titles(lists: Lists) -> list[str]:
+    match lists.active:
+        case Task(starred=True, title=title):
+            active = [title]
+        case _:
+            active = []
+    return [*active, *(item.task.title for item in lists.parked if item.task.starred)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["new fix the build *", "fix the build *", "+ fix the build  * ", "new fix the build * *"],
+)
+def test_a_lone_star_at_the_end_adds_a_starred_task_at_the_top(text: str) -> None:
+    result = applied(Lists(Idle(), (OTHER,)), text)
+    assert result.lists.parked == (ParkedTask(STARRED_FIX, Queued()), OTHER)
+    assert result.message == "added fix the build to the queue as 1, starred · s 1 to start it"
+    assert parse(render(result.lists)) == result.lists
+
+
+def test_a_size_goes_before_the_star() -> None:
+    assert applied(Lists(), "fix the build ~1h *").lists.parked[0].task == replace(
+        STARRED_FIX, minutes=60
+    )
+
+
+def test_a_star_that_isnt_the_last_word_stays_in_the_title() -> None:
+    assert applied(Lists(), "new fix * now").lists.parked[0].task == Task("fix * now")
+    assert applied(Lists(), "new fix*").lists.parked[0].task == Task("fix*")
+
+
+@pytest.mark.parametrize("text", ["new *", "*", "* *", "new ~1h *", "star ~1h"])
+def test_a_star_alone_is_no_title(text: str) -> None:
+    assert run(Lists(), text) == Rejected("a task needs a title")
+
+
+def test_starring_a_row_moves_it_to_the_top_and_leaves_other_stars() -> None:
+    result = applied(Lists(ACTIVE, (HELD, OTHER)), "star 2")
+    assert result.lists.parked == (replace(OTHER, task=replace(OTHER.task, starred=True)), HELD)
+    assert result.events == (Event(NOW, "starred", "tidy logging config"),)
+    assert result.message == "starred tidy logging config"
+    assert parse(render(result.lists)) == result.lists
+
+
+def test_star_alone_stars_the_active_task_and_it_stays_active() -> None:
+    result = applied(Lists(ACTIVE, (HELD,)), "star")
+    assert result.lists == Lists(replace(ACTIVE, starred=True), (HELD,))
+
+
+def test_star_words_add_a_starred_task() -> None:
+    result = applied(Lists(ACTIVE, (HELD,)), "star ship the thing ~1h")
+    assert result.lists.parked[0] == ParkedTask(Task("ship the thing", 60, starred=True), Queued())
+    assert result.lists.parked[1:] == (HELD,)
+
+
+def test_a_number_is_always_a_row_never_a_word_in_a_title() -> None:
+    lists = Lists(Idle(), (OTHER, ParkedTask(Task("ticket 1"), Queued())))
+    assert applied(lists, "star 1").lists.parked[0].task == replace(OTHER.task, starred=True)
+
+
+def test_unstar_takes_it_off_and_the_row_stays_where_it_is() -> None:
+    result = applied(Lists(Idle(), (OTHER, HELD, UNHELD)), "unstar 2")
+    assert result.lists.parked == (OTHER, UNHELD, UNHELD)
+    assert result.events == (Event(NOW, "unstarred", "1129 reset flow"),)
+    assert applied(Lists(STARRED_FIX), "unstar").lists.active == Task("fix the build")
+
+
+@pytest.mark.parametrize(
+    ("lists", "text", "reason"),
+    [
+        (Lists(), "star", "no active task to star: give a row, for example star 2"),
+        (Lists(FromQuick(MERGE)), "star", "no active task to star: give a row, for example star 2"),
+        (Lists(parked=(OTHER,)), "star 9", "there's no 9 in the queue"),
+        (Lists(parked=(OTHER,)), "unstar 9", "there's no 9 in the queue"),
+        (Lists(parked=(OTHER,)), "unstar now", "unstar a row: unstar 2"),
+    ],
+)
+def test_star_refuses(lists: Lists, text: str, reason: str) -> None:
+    assert run(lists, text) == Rejected(reason)
+
+
+def test_the_star_stays_with_the_task_through_parking_steps_and_switching() -> None:
+    lists, _ = said(Lists(STARRED_FIX, (OTHER,)), "step a", "done", "park", "s 2", "s 1")
+    assert lists.active == Task("fix the build", steps=(Step("a", "done"),), starred=True)
+    assert parse(render(lists)) == lists
+
+
+@pytest.mark.parametrize("text", ["done", "finish"])
+def test_finishing_takes_the_star_with_it(text: str) -> None:
+    assert starred_titles(applied(Lists(STARRED_FIX), text).lists) == []
+
+
+@pytest.mark.parametrize("text", ["quick tidy *", "q tidy * *"])
+def test_a_quick_item_never_comes_back_starred(text: str) -> None:
+    added = applied(Lists(), text)
+    assert added.lists.quick == (Task("tidy"),)
+    parked = applied(applied(added.lists, "s q1").lists, "park half done").lists
+    assert parked.parked == (ParkedTask(Task("tidy"), LeftOff("half done")),)
+    assert parse(render(parked)) == parked
+
+
+def test_unstar_leaves_no_star_to_read_back() -> None:
+    lists = applied(applied(Lists(), "new foo * *").lists, "unstar 1").lists
+    assert lists.parked[0].task == Task("foo")
+    assert parse(render(lists)) == lists
+
+
+@pytest.mark.parametrize(
+    ("text", "marks"),
+    [
+        ("fix it *", ((7, 8),)),
+        ("fix it * ", ((7, 8),)),
+        ("fix it * *", ((7, 8), (9, 10))),
+        ("fix * it", ()),
+        ("new fix it *", ((0, 3), (11, 12))),
+        ("star fix", ((0, 4),)),
+        ("star fix *", ((0, 4), (9, 10))),
+        ("quick tidy *", ((0, 5),)),
+    ],
+)
+def test_the_star_is_marked_as_its_typed(text: str, marks: tuple[tuple[int, int], ...]) -> None:
+    assert preview(text, WORDS, Lists(), NOW) == Preview(marks)
