@@ -1,8 +1,8 @@
-"""Agents running in herdr panes, talked to as if I'd typed into their pane.
+"""Chief, running in a herdr pane, talked to as if I'd typed into its pane.
 
-`herdr agent get <name>` says whether one is running and ready, and `herdr agent prompt <name>
-<text>` types a line into it. Nothing here raises: what goes wrong comes back as a sentence, and
-a herdr that doesn't answer in time is one of those, so the overlay never waits long on it.
+`herdr agent get chief` says whether it's running and ready, and `herdr agent prompt chief <text>`
+types a line into it. Nothing here raises: what goes wrong comes back as a sentence, and a herdr
+that doesn't answer in time is one of those, so the overlay never waits long on it.
 """
 
 from __future__ import annotations
@@ -12,9 +12,11 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QProcess
 
+from app.core.model import CHIEF
+
 SAID = {
-    "agent_not_found": "{name} isn't running",
-    "agent_blocked": "{name} is waiting on a question in its pane",
+    "agent_not_found": f"{CHIEF} isn't running",
+    "agent_blocked": f"{CHIEF} is waiting on a question in its pane",
     "server_not_running": "herdr isn't running",
 }
 # herdr's failure is `{"error": {"code": "...", "message": "..."}}` on stderr; anything else it
@@ -35,34 +37,34 @@ class Herdr:
     check_s: float = 1.0  # runs on a key press, so it mustn't wait long
     send_s: float = 5.0
 
-    def check(self, name: str) -> str:
-        """ "" when it's running and ready for a line, else why not."""
-        match self._run(self.check_s, "agent", "get", name):
+    def check(self) -> str:
+        """ "" when chief is running and ready for a line, else why not."""
+        match self._run(self.check_s, "agent", "get", CHIEF):
             case _Answer(code=0, out=out) if _status(out) == "blocked":
-                return SAID["agent_blocked"].format(name=name)
+                return SAID["agent_blocked"]
             case _Answer(code=0):
                 return ""
             case _Answer(err=err, code=code):
-                return _why(name, err, code)
+                return _why(err, code)
             case _Gone(why=why):
                 return why
             case _NoAnswer():
                 return "herdr didn't answer"
 
-    def send(self, name: str, text: str) -> str:
-        """Types `text` into the agent's pane, marked as sent from glance, so the agent can tell
-        it from what I type in its pane. A slash command (/compact) goes as it is, or it wouldn't
-        run. "" when it's sent, else why not."""
+    def send(self, text: str) -> str:
+        """Types `text` into chief's pane, marked as sent from glance, so chief can tell it from
+        what I type in its pane. A slash command (/compact) goes as it is, or it wouldn't run.
+        "" when it's sent, else why not."""
         marked = text if text.startswith("/") else f"[via glance] {text}"
-        match self._run(self.send_s, "agent", "prompt", name, marked):
+        match self._run(self.send_s, "agent", "prompt", CHIEF, marked):
             case _Answer(code=0):
                 return ""
             case _Answer(err=err, code=code):
-                return _why(name, err, code)
+                return _why(err, code)
             case _Gone(why=why):
                 return why
             case _NoAnswer():
-                return f"herdr didn't answer: check {name}'s pane before sending it again"
+                return f"herdr didn't answer: check {CHIEF}'s pane before sending it again"
 
     def _run(self, wait_s: float, *args: str) -> _Answer | _NoAnswer | _Gone:
         """Qt runs it: unlike Python's subprocess, failing to start and running out of time
@@ -84,13 +86,13 @@ class Herdr:
 
 @dataclass(frozen=True)
 class NoHerdr:
-    """herdr isn't installed, so no agent is running."""
+    """herdr isn't installed, so chief isn't running."""
 
-    def check(self, name: str) -> str:
-        return f"{name} isn't running: herdr isn't installed"
+    def check(self) -> str:
+        return f"{CHIEF} isn't running: herdr isn't installed"
 
-    def send(self, name: str, text: str) -> str:
-        return self.check(name) if text else ""  # nothing to send isn't refused
+    def send(self, text: str) -> str:
+        return self.check() if text else ""  # nothing to send isn't refused
 
 
 @dataclass(frozen=True)
@@ -125,10 +127,10 @@ def _unescape(escape: re.Match[str]) -> str:
     return " " if escape[1] in "ntr" else escape[1]
 
 
-def _why(name: str, err: str, code: int) -> str:
+def _why(err: str, code: int) -> str:
     """herdr's failure as one line: a known code says it plainly, else herdr's message (with
     JSON's `\\"` and `\\\\` undone), or what it wrote, or its exit code."""
-    known = [SAID[found[1]].format(name=name) for found in CODE.finditer(err) if found[1] in SAID]
+    known = [SAID[found[1]] for found in CODE.finditer(err) if found[1] in SAID]
     said = [ESCAPE.sub(_unescape, found[1]) for found in MESSAGE.finditer(err)] or [err]
     line = " ".join(said[0].split())[:200]
-    return next(iter(known), f"{name}: {line or f'herdr exited with {code}'}")
+    return next(iter(known), f"{CHIEF}: {line or f'herdr exited with {code}'}")

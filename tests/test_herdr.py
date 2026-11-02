@@ -47,7 +47,7 @@ def test_herdrs_answer_becomes_a_sentence_never_an_error(
     herdr = fake(
         tmp_path, str(answer.get("out", "")), str(answer.get("err", "")), int(answer.get("code", 0))
     )
-    assert herdr.check("chief") == said
+    assert herdr.check() == said
 
 
 def test_a_line_is_marked_as_from_glance_but_a_slash_command_isnt(tmp_path: Path) -> None:
@@ -55,8 +55,8 @@ def test_a_line_is_marked_as_from_glance_but_a_slash_command_isnt(tmp_path: Path
     typed = tmp_path / "typed.txt"
     script.write_text(f"import sys\nopen({str(typed)!r}, 'a').write(sys.argv[-1] + '\\n')")
     herdr = Herdr((sys.executable, str(script)), check_s=10, send_s=10)
-    assert herdr.send("chief", "move deep work") == ""
-    assert herdr.send("chief", "/compact") == ""
+    assert herdr.send("move deep work") == ""
+    assert herdr.send("/compact") == ""
     assert typed.read_text().splitlines() == ["[via glance] move deep work", "/compact"]
 
 
@@ -65,9 +65,5 @@ def test_a_herdr_that_cant_be_run_is_said_so(tmp_path: Path) -> None:
     broken = tmp_path / "broken.exe"
     broken.write_bytes(b"")
     for program in (tmp_path / "gone.exe", broken):
-        assert (
-            Herdr((str(program),))
-            .send("chief", "hi")
-            .startswith("restart glance: herdr can't be run")
-        )
-    assert NoHerdr().send("chief", "hi") == "chief isn't running: herdr isn't installed"
+        assert Herdr((str(program),)).send("hi").startswith("restart glance: herdr can't be run")
+    assert NoHerdr().send("hi") == "chief isn't running: herdr isn't installed"

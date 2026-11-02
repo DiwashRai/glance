@@ -103,9 +103,8 @@ fix the build to the queue as 4 · s 4 to start it").
 ## Commands and keys
 
 Typed into the overlay's text box. A command word first decides. With none, a line ending in a time and a length is a
-block, and anything else is a new task. A line starting with one space goes to my assistant agent, two or more to my
-chief of staff (both in herdr, typed into their panes). As I type, the words glance picked up are coloured, so I can see
-what it will do.
+block, and anything else is a new task. A line starting with a space goes to my chief of staff, `chief` (in herdr, typed
+into its pane). As I type, the words glance picked up are coloured, so I can see what it will do.
 
 | Command                                         | Does                                                                                                                                                                                           |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -192,8 +191,8 @@ anything longer in a file it names. It doesn't depend on herdr or any other agen
   how many more.
 - The overlay shows the oldest in a yellow-edged card under the middle one, and grows to fit it. Oldest first, so one
   that comes in while I'm reading goes to the back.
-- ↵ on an empty line clears it and shows the next. Answering its sender with the space prefix clears it too; the card
-  shows the prefix (`␣␣ reply`).
+- ↵ on an empty line clears it and shows the next. If it's from `chief`, answering with the space prefix clears it too;
+  the card shows the prefix (`␣ reply`). Other senders can't be answered from here.
 - Each message is its own file in `inbox/`, deleted when cleared, so the folder is empty once I've read them all. The
   app watches the folder, so a message shows as soon as it comes.
 
@@ -328,7 +327,7 @@ glance for me to sort into lists. Personal reminders stay in Todoist. No glance 
 - The agent only runs when I ask, or when plain code hits a case it can't handle. That keeps it cheap and predictable.
   Expect a few seconds per answer; commands stay instant.
 - **How glance reaches the agent is a setting**: either run the CLI once per request, or send the request to my
-  always-on assistant agent in herdr, which remembers the day's context. Details are in the appendix.
+  always-on `chief` agent in herdr, which remembers the day's context. Details are in the appendix.
 
 ## Main parts
 
@@ -354,29 +353,29 @@ glance for me to sort into lists. Personal reminders stay in Todoist. No glance 
 
 ## Appendix: how glance reaches the agent
 
-**Built so far:** only herdr, and only as if I'd typed into the agent's pane (`herdr agent prompt <name> "<text>"`): one
-space for `assistant`, two for `chief`. There's no fallback or request ID yet. An agent answers in its pane, or leaves
-me a message in glance with `glance --from` (see Messages for me). The plan below is where it may go.
+**Built so far:** only herdr, only to `chief`, and only as if I'd typed into its pane
+(`herdr agent prompt chief "[via glance] <text>"`). There's no fallback or request ID yet. It answers in its pane, or
+leaves me a message in glance with `glance --from` (see Messages for me). The plan below is where it may go.
 
 Two ways, chosen in settings, behind one small interface (like providers today):
 
 - `headless`: run the CLI once per request (`copilot -p ...` or `claude -p ...`; the command is a template in settings).
   No window.
-- `herdr`: send the request to a long-running "assistant" agent in a herdr pane
-  (`herdr agent prompt <target> "<text>" --wait`). It keeps the day's context between requests. `o` becomes
-  `herdr agent focus <target>`, which jumps straight into the same conversation.
+- `herdr`: send the request to the long-running `chief` agent in a herdr pane
+  (`herdr agent prompt chief "<text>" --wait`). It keeps the day's context between requests. `o` becomes
+  `herdr agent focus chief`, which jumps straight into the same conversation.
 
 Rules that apply to both:
 
 - The answer always comes back through the MCP tools (suggestions plus a short reply), never by reading the agent's
   terminal output.
 - Glance sends one short line with a request ID. The agent fetches the context itself with the day snapshot tool.
-- If the herdr assistant is busy (I'm mid-conversation with it) or not running, glance falls back to `headless` instead
-  of interrupting the conversation.
+- If `chief` is busy (I'm mid-conversation with it) or not running, glance falls back to `headless` instead of
+  interrupting the conversation.
 - Different purposes can go different ways. For example, the watcher's questions go `headless` so they don't clutter my
-  conversation with the assistant.
-- Starting the assistant fresh each morning (from `notes.md` and the day snapshot) keeps its conversation from growing
-  all day.
+  conversation with `chief`.
+- Starting `chief` fresh each morning (from `notes.md` and the day snapshot) keeps its conversation from growing all
+  day.
 
 ```toml
 [agent]
@@ -387,7 +386,6 @@ fallback = "headless"    # when the herdr agent is busy or not running
 command = ["copilot", "-p", "{prompt}"]
 
 [agent.herdr]
-target = "assistant"
 timeout_ms = 120000
 
 [agent.routes]

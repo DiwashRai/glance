@@ -262,6 +262,9 @@ class Problem:
     message: str
 
 
+CHIEF = "chief"  # the one agent a line can be sent to: its name in herdr, and on its messages
+
+
 @dataclass(frozen=True)
 class Message:
     """One for me in the inbox, from an agent or a script (`glance --from chief '...'`), until I
@@ -299,5 +302,3 @@ class CommandWords:
     remove: tuple[str, ...] = ("rm",)
     star: tuple[str, ...] = ("star",)
     unstar: tuple[str, ...] = ("unstar",)
-    # Not command words: the agents a line starting with one space goes to, then two or more
-    agents: tuple[str, ...] = ("assistant", "chief")

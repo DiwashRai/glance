@@ -29,7 +29,7 @@ PLANNED = Lists(plan=Plan(TODAY, (DEEP, RUN)))
 def run(lists: Lists, text: str) -> Applied | Rejected:
     match parse_command(text, CommandWords()):
         case Ask():
-            pytest.fail("for the assistant")
+            pytest.fail("for chief")
         case command:
             return apply(lists, command, NOW)
 
@@ -158,7 +158,7 @@ def test_a_block_glance_cant_plan_is_refused(text: str, reason: str) -> None:
         ),
         ("call dentist 3pm", Preview()),
         ("wait for Sam 3pm for 1h", Preview(((0, 4),))),  # the command word wins
-        (" what's next?", Preview(agent="assistant", note="assistant")),
+        (" what's next?", Preview(to_chief=True, note="chief")),
     ],
 )
 def test_preview_marks_what_glance_picked_up(text: str, shown: Preview) -> None:

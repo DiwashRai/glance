@@ -41,10 +41,9 @@ Glance has two parts:
 As you type, the words glance picked up turn blue (a block's time and length, or a command word), and a note on the
 right says which blocks a new one cuts back. No blue means it'll be a task.
 
-**Talking to your agents.** A line starting with one space is typed into your `assistant` agent's herdr pane, as if
-you'd typed it there; two or more spaces send it to `chief`. The `›` and the agent's name turn yellow, or the note says
-in red that it isn't running (your text stays to send again). Replies are in the agent's pane. The names are `agents` in
-`[glance]`.
+**Talking to chief.** A line starting with a space is typed into your `chief` agent's herdr pane, as if you'd typed it
+there, marked `[via glance]`. The `›` and chief's name turn yellow, or the note says in red that it isn't running (your
+text stays to send again). Replies are in its pane.
 
 **From the command line.** `glance` prints your lists, numbered the way commands count them, and `glance '<line>'` runs
 a line as if you'd typed it into the overlay: `glance 'quick reply to Sam'` (single quotes, so PowerShell leaves `$`

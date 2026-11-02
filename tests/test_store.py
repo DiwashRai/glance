@@ -59,10 +59,10 @@ def test_messages_wait_oldest_first_and_once_all_are_cleared_nothing_is_left(
 ) -> None:
     store = Store(tmp_path)
     store.tell("chief", "release notes are ready", AT)
-    store.tell("assistant", "Sam's birthday", AT + timedelta(minutes=3))
+    store.tell("backup-script", "Sam's birthday", AT + timedelta(minutes=3))
     first, second = store.inbox()
     assert (first.sender, first.at, first.text) == ("chief", "09:58", "release notes are ready")
-    assert (second.sender, second.at) == ("assistant", "10:01")
+    assert (second.sender, second.at) == ("backup-script", "10:01")
     for message in (first, second):
         store.clear(message)
     assert store.inbox() == ()

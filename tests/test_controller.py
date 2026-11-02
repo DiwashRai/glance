@@ -11,27 +11,27 @@ from app.store import Store
 NOW = datetime(2026, 10, 17, 9, 58, 40, tzinfo=timezone(timedelta(hours=1)))
 
 
-class Agents:
-    """herdr, as the controller sees it: who's running, and what each was sent."""
+class Chief:
+    """herdr, as the controller sees it: whether chief is running, and what it was sent."""
 
-    def __init__(self, *running: str) -> None:
-        self.up = set(running)
-        self.asked = 0  # how many times it was asked who's running
-        self.sent: list[tuple[str, str]] = []
+    def __init__(self, *, up: bool = True) -> None:
+        self.up = up
+        self.asked = 0  # how many times it was asked whether chief's running
+        self.sent: list[str] = []
 
-    def check(self, name: str) -> str:
+    def check(self) -> str:
         self.asked += 1
-        return "" if name in self.up else f"{name} isn't running"
+        return "" if self.up else "chief isn't running"
 
-    def send(self, name: str, text: str) -> str:
-        if name not in self.up:
-            return f"{name} isn't running"
-        self.sent.append((name, text))
+    def send(self, text: str) -> str:
+        if not self.up:
+            return "chief isn't running"
+        self.sent.append(text)
         return ""
 
 
-def controller(folder: Path, agents: Agents | None = None) -> Controller:
-    return Controller(Store(folder), CommandWords(), lambda: NOW, agents or Agents())
+def controller(folder: Path, chief: Chief | None = None) -> Controller:
+    return Controller(Store(folder), CommandWords(), lambda: NOW, chief or Chief())
 
 
 def test_a_command_is_saved_then_shown_then_logged(tmp_path: Path) -> None:
@@ -57,13 +57,13 @@ def test_a_rejection_changes_nothing_and_keeps_the_text(tmp_path: Path) -> None:
     assert not (tmp_path / "tasks.md").exists()
 
 
-def test_spaces_first_send_the_line_to_an_agent_and_nothing_else(tmp_path: Path) -> None:
-    agents = Agents("assistant", "chief")
-    glance = controller(tmp_path, agents)
+def test_spaces_first_send_the_line_to_chief_and_nothing_else(tmp_path: Path) -> None:
+    chief = Chief()
+    glance = controller(tmp_path, chief)
     glance.open()
-    assert glance.run(" done") == View(Lists(), "sent to assistant", accepted=True)
+    assert glance.run(" done") == View(Lists(), "sent to chief", accepted=True)
     assert glance.run("   ask backend for the API ").message == "sent to chief"
-    assert agents.sent == [("assistant", "done"), ("chief", "ask backend for the API")]
+    assert chief.sent == ["done", "ask backend for the API"]
     assert glance.run("   ") == View(Lists(), accepted=True)  # only spaces: nothing sent
     assert not (tmp_path / "tasks.md").exists()
 
@@ -72,34 +72,34 @@ def test_enter_on_an_empty_line_clears_the_top_message_and_so_does_answering_it(
     tmp_path: Path,
 ) -> None:
     store = Store(tmp_path)
-    for minute, sender in enumerate(("chief", "assistant", "chief")):
+    for minute, sender in enumerate(("backup-script", "chief", "chief", "chief")):
         store.tell(sender, f"message {minute}", NOW + timedelta(minutes=minute))
-    agents = Agents("assistant", "chief")
-    glance = controller(tmp_path, agents)
+    chief = Chief()
+    glance = controller(tmp_path, chief)
     glance.open()
-    glance.run(" for assistant")  # chief's is on top: answering someone else leaves it
-    assert [message.text for message in glance.inbox] == ["message 0", "message 1", "message 2"]
-    glance.run("  yes, post them")
+    glance.run(" hi")  # the script's is on top: a line to chief doesn't answer it
+    assert [message.text for message in glance.inbox][0] == "message 0"
     glance.run("")
-    assert [message.text for message in store.inbox()] == ["message 2"]  # gone from disk too
-    agents.up.discard("chief")
-    glance.run("  not sent")  # so not answered
-    assert len(glance.inbox) == 1
+    glance.run(" yes, post them")
+    assert [message.text for message in store.inbox()] == ["message 2", "message 3"]  # from disk
+    chief.up = False
+    glance.run(" not sent")  # so not answered
+    assert len(glance.inbox) == 2
 
 
-def test_an_agent_that_isnt_running_is_shown_in_red_and_keeps_the_line(tmp_path: Path) -> None:
-    agents = Agents("chief")
-    glance = controller(tmp_path, agents)
+def test_a_chief_that_isnt_running_is_shown_in_red_and_keeps_the_line(tmp_path: Path) -> None:
+    chief = Chief(up=False)
+    glance = controller(tmp_path, chief)
     glance.open()
     shown = glance.preview(" move deep work to 3pm")
-    assert (shown.note, shown.trouble) == ("assistant isn't running", True)
+    assert (shown.note, shown.trouble) == ("chief isn't running", True)
     glance.preview(" move deep work to 3pm!")
-    assert agents.asked == 1  # herdr is asked once per open, not per key
-    assert glance.run(" move deep work") == View(Lists(), problem="assistant isn't running")
-    assert glance.preview("  hi").note == "chief"
-    agents.up.add("assistant")
+    assert chief.asked == 1  # herdr is asked once per open, not per key
+    assert glance.run(" move deep work") == View(Lists(), problem="chief isn't running")
+    chief.up = True
     glance.open()  # started since: the next open asks again
-    assert not glance.preview(" hi").trouble
+    shown = glance.preview(" hi")
+    assert (shown.note, shown.trouble) == ("chief", False)
 
 
 def test_a_line_that_means_something_else_by_enter_isnt_run(tmp_path: Path) -> None:
@@ -108,7 +108,7 @@ def test_a_line_that_means_something_else_by_enter_isnt_run(tmp_path: Path) -> N
     plan = f"# Today {NOW.date().isoformat()}\n- 09:00-10:00 deep\n- 21:00-22:00 deep\n"
     (tmp_path / "tasks.md").write_text(plan, encoding="utf-8")
     clock = [NOW.replace(hour=8, minute=59)]
-    glance = Controller(Store(tmp_path), CommandWords(), lambda: clock[0], Agents())
+    glance = Controller(Store(tmp_path), CommandWords(), lambda: clock[0], Chief())
     glance.open()
     assert glance.preview("review 9 for 1h").note == "replaces deep"
     clock[0] = NOW.replace(hour=9, minute=1)
