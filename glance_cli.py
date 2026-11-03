@@ -111,13 +111,13 @@ def _name(text: str) -> str:
 
 
 class _NotSent:
-    """A line for the agent (spaces first) isn't sent from here: agents have their own ways."""
+    """A line for an agent (spaces first) isn't sent from here: agents have their own ways."""
 
-    def check(self) -> str:
-        return "lines for the agent aren't sent from the command line"
+    def check(self, name: str) -> str:
+        return f"lines for {name} aren't sent from the command line"
 
-    def send(self, text: str) -> str:
-        return self.check() if text else ""
+    def send(self, name: str, text: str) -> str:
+        return self.check(name) if text else ""
 
 
 def _now() -> datetime:

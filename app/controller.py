@@ -46,23 +46,23 @@ class View:
     accepted: bool = False  # the command ran, so the text box can be cleared
 
 
-class Agent(Protocol):
-    """Where a line for the agent goes: herdr, in the app. Neither call raises: each returns "" when
-    all is well, else why not."""
+class Agents(Protocol):
+    """The agents a line can be sent to: herdr's, in the app. Neither call raises: each returns
+    "" when all is well, else why not."""
 
-    def check(self) -> str: ...
+    def check(self, name: str) -> str: ...
 
-    def send(self, text: str) -> str: ...
+    def send(self, name: str, text: str) -> str: ...
 
 
 class Controller:
     def __init__(
-        self, store: Store, words: CommandWords, now: Callable[[], datetime], agent: Agent
+        self, store: Store, words: CommandWords, now: Callable[[], datetime], agents: Agents
     ) -> None:
         self.store = store
         self.words = words
         self.now = now
-        self.agent = agent
+        self.agents = agents
         self.agent_checked = False  # this open
         self.agent_trouble = ""  # what's wrong with the agent, if it's been checked
         self.lists = Lists()
@@ -106,7 +106,7 @@ class Controller:
         one. If it can't be sent, the line stays, to send again."""
         if not text:
             return View(self.lists, problem=self.problem, accepted=True)
-        why = self.agent.send(text)
+        why = self.agents.send(AGENT, text)
         self.agent_checked, self.agent_trouble = True, why
         if why:
             return View(self.lists, problem=why)
@@ -150,7 +150,7 @@ class Controller:
 
     def _trouble(self) -> str:
         if not self.agent_checked:
-            self.agent_checked, self.agent_trouble = True, self.agent.check()
+            self.agent_checked, self.agent_trouble = True, self.agents.check(AGENT)
         return self.agent_trouble
 
     def _moved_on(self, text: str, now: datetime) -> bool:
