@@ -58,12 +58,12 @@ def test_a_rejection_changes_nothing_and_keeps_the_text(tmp_path: Path) -> None:
 
 
 def test_spaces_first_send_the_line_to_an_agent_and_nothing_else(tmp_path: Path) -> None:
-    agents = Agents("assistant", "chief")
+    agents = Agents("chief")
     glance = controller(tmp_path, agents)
     glance.open()
-    assert glance.run(" done") == View(Lists(), "sent to assistant", accepted=True)
+    assert glance.run(" done") == View(Lists(), "sent to chief", accepted=True)
     assert glance.run("   ask backend for the API ").message == "sent to chief"
-    assert agents.sent == [("assistant", "done"), ("chief", "ask backend for the API")]
+    assert agents.sent == [("chief", "done"), ("chief", "ask backend for the API")]
     assert glance.run("   ") == View(Lists(), accepted=True)  # only spaces: nothing sent
     assert not (tmp_path / "tasks.md").exists()
 
@@ -72,34 +72,34 @@ def test_enter_on_an_empty_line_clears_the_top_message_and_so_does_answering_it(
     tmp_path: Path,
 ) -> None:
     store = Store(tmp_path)
-    for minute, sender in enumerate(("chief", "assistant", "chief")):
+    for minute, sender in enumerate(("backup-script", "chief", "chief")):
         store.tell(sender, f"message {minute}", NOW + timedelta(minutes=minute))
-    agents = Agents("assistant", "chief")
+    agents = Agents("chief")
     glance = controller(tmp_path, agents)
     glance.open()
-    glance.run(" for assistant")  # chief's is on top: answering someone else leaves it
+    glance.run(" hi")  # the script's is on top: a line to the agent doesn't answer it
     assert [message.text for message in glance.inbox] == ["message 0", "message 1", "message 2"]
-    glance.run("  yes, post them")
     glance.run("")
+    glance.run(" yes, post them")
     assert [message.text for message in store.inbox()] == ["message 2"]  # gone from disk too
     agents.up.discard("chief")
-    glance.run("  not sent")  # so not answered
+    glance.run(" not sent")  # so not answered
     assert len(glance.inbox) == 1
 
 
 def test_an_agent_that_isnt_running_is_shown_in_red_and_keeps_the_line(tmp_path: Path) -> None:
-    agents = Agents("chief")
+    agents = Agents()
     glance = controller(tmp_path, agents)
     glance.open()
     shown = glance.preview(" move deep work to 3pm")
-    assert (shown.note, shown.trouble) == ("assistant isn't running", True)
+    assert (shown.note, shown.trouble) == ("chief isn't running", True)
     glance.preview(" move deep work to 3pm!")
     assert agents.asked == 1  # herdr is asked once per open, not per key
-    assert glance.run(" move deep work") == View(Lists(), problem="assistant isn't running")
-    assert glance.preview("  hi").note == "chief"
-    agents.up.add("assistant")
+    assert glance.run(" move deep work") == View(Lists(), problem="chief isn't running")
+    agents.up.add("chief")
     glance.open()  # started since: the next open asks again
-    assert not glance.preview(" hi").trouble
+    shown = glance.preview(" hi")
+    assert (shown.note, shown.trouble) == ("chief", False)
 
 
 def test_a_line_that_means_something_else_by_enter_isnt_run(tmp_path: Path) -> None:

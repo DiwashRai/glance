@@ -52,7 +52,7 @@ def test_a_line_runs_as_if_typed_then_is_logged(
     ("line", "why"),
     [
         ("done q1", "there's no q1 in quick"),
-        (" move deep work to 3pm", "lines for assistant aren't sent from the command line"),
+        (" move deep work to 3pm", "lines for chief aren't sent from the command line"),
     ],
 )
 def test_a_refused_line_says_why_and_changes_nothing(

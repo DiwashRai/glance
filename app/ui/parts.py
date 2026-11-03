@@ -36,8 +36,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.commands import Preview, spaces_for
+from app.core.commands import Preview
 from app.core.model import (
+    AGENT,
     FOCUS_SLOTS,
     CommandWords,
     FromQuick,
@@ -342,7 +343,7 @@ LINE_BREAK = re.compile(r"\r\n|[\t\n\r\v\f\x1c-\x1e\x85\N{LINE SEPARATOR}\N{PARA
 class Box(QPlainTextEdit):
     """What I type: one line that wraps, and grows to MAX_LINES as it does. Enter sends it
     (`sent`). A line break that comes in another way (a paste, an input method, dictation)
-    becomes a space as it comes in, as an agent's pane would read it as Enter. Tab does
+    becomes a space as it comes in, as the agent's pane would read it as Enter. Tab does
     nothing: there's nowhere else to go."""
 
     sent = Signal()
@@ -400,7 +401,7 @@ class Box(QPlainTextEdit):
 
 class Prompt(QFrame):
     """The text box, with board F's blue `›`. As I type, the words glance picked up are blue, and
-    a note on the right says what else will happen. For an agent, the `›` and the note (its name)
+    a note on the right says what else will happen. For the agent, the `›` and the note (its name)
     turn yellow, or the note is red if it can't be sent to. The `›` and the note stay level with
     the first line as the box grows."""
 
@@ -422,9 +423,9 @@ class Prompt(QFrame):
         note = preview.note
         fitted = self.note.fontMetrics().elidedText(note, Qt.TextElideMode.ElideRight, NOTE_WIDTH)
         self.note.setText(fitted)
-        agent = "agent" if preview.agent else ""
-        restyle(self.mark, "tone", agent)
-        restyle(self.note, "tone", "error" if preview.trouble else agent)
+        tone = "agent" if preview.to_agent else ""
+        restyle(self.mark, "tone", tone)
+        restyle(self.note, "tone", "error" if preview.trouble else tone)
         _colour(self.input, preview.marks)
 
 
@@ -482,14 +483,14 @@ class InboxCard(QFrame):
         top.addWidget(self.count)
         self.text = label("", "title", 14)
         self.text.setWordWrap(True)
-        self.spaces = label("", "kbd", 11)  # ␣␣ for chief, ␣ for assistant
+        self.space = label("␣", "kbd", 11)
         self.reply = label("reply", "dim", 12)
         keys = QHBoxLayout()
         keys.setSpacing(6)
         for widget in (label("↵", "kbd", 11), label("clear", "dim", 12)):
             keys.addWidget(widget)
         keys.addSpacing(10)
-        keys.addWidget(self.spaces)
+        keys.addWidget(self.space)
         keys.addWidget(self.reply)
         keys.addStretch()
         layout.addLayout(top)
@@ -497,8 +498,8 @@ class InboxCard(QFrame):
         layout.addLayout(keys)
         self.hide()
 
-    def show_inbox(self, inbox: tuple[Message, ...], words: CommandWords) -> None:
-        """Answering is offered only to a sender that lines can go to."""
+    def show_inbox(self, inbox: tuple[Message, ...]) -> None:
+        """Answering is offered only to the agent, the one sender that lines can go to."""
         self.setVisible(bool(inbox))
         if not inbox:
             return
@@ -507,10 +508,9 @@ class InboxCard(QFrame):
         self.at.setText(top.at)
         self.count.setText(f"1 of {len(inbox)}" if len(inbox) > 1 else "")
         self.text.setText(top.text)
-        spaces = spaces_for(top.sender, words)
-        self.spaces.setText("␣" * spaces)
-        self.spaces.setVisible(bool(spaces))
-        self.reply.setVisible(bool(spaces))
+        answerable = top.sender == AGENT
+        self.space.setVisible(answerable)
+        self.reply.setVisible(answerable)
 
 
 def hints(words: CommandWords) -> QWidget:

@@ -26,7 +26,6 @@ from app.core.commands import (
     apply,
     parse_command,
     preview,
-    spaces_for,
 )
 from app.core.model import (
     CommandWords,
@@ -56,7 +55,7 @@ IDLE_DAY = Lists(Idle(), (WAITING, LEFT))
 def run(lists: Lists, text: str) -> Applied | Rejected:
     match parse_command(text, WORDS):
         case Ask():
-            pytest.fail("for the assistant")
+            pytest.fail("for the agent")
         case command:
             return apply(lists, command, NOW)
 
@@ -93,9 +92,8 @@ def applied(lists: Lists, text: str) -> Applied:
         ("STAR 3", Star("3")),
         ("unstar", Unstar()),
         ("hello there", Typed("hello there")),
-        (" what's next?", Ask("assistant", "what's next?")),
-        ("  ask backend", Ask("chief", "ask backend")),
-        ("     ask backend", Ask("chief", "ask backend")),
+        (" what's next?", Ask("what's next?")),
+        ("     ask backend", Ask("ask backend")),
     ],
 )
 def test_parses_the_first_word(text: str, command: Command | Ask) -> None:
@@ -113,15 +111,6 @@ def test_words_come_from_settings() -> None:
     words = CommandWords(park=("later",))
     assert parse_command("later notes", words) == Park(LeftOff("notes"))
     assert parse_command("park notes", words) == Typed("park notes")
-    # with one agent, any number of spaces is for it
-    assert parse_command("  x", CommandWords(agents=("me",))) == Ask("me", "x")
-
-
-def test_a_reply_offered_with_spaces_goes_to_that_agent() -> None:
-    """The message card shows how many spaces answer its sender."""
-    for agent in WORDS.agents:
-        assert parse_command(" " * spaces_for(agent, WORDS) + "yes", WORDS) == Ask(agent, "yes")
-    assert spaces_for("backup-script", WORDS) == 0  # not an agent: no reply offered
 
 
 NEW = ParkedTask(Task("fix the build"), Queued())

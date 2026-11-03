@@ -7,9 +7,9 @@ saved. The window writes the history (`write_history()`) after drawing, so a fai
 write can't leave the window showing stale lists.
 
 Messages for me wait in `inbox`, oldest first, read again on each open and whenever the app sees
-the inbox change. The top one is cleared by Enter on an empty line, or by answering whoever sent
-it. Oldest first, so one that comes in while I'm reading goes to the back, and what Enter clears
-is always the one shown.
+the inbox change. The top one is cleared by Enter on an empty line or, if the agent sent it, by
+answering it. Oldest first, so one that comes in while I'm reading goes to the back, and what
+Enter clears is always the one shown.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from app.core.commands import (
     parse_command,
     preview,
 )
-from app.core.model import CommandWords, Event, Lists, Message
+from app.core.model import AGENT, CommandWords, Event, Lists, Message
 from app.store import NO_FILE, Snapshot, Store, Unreadable
 
 
@@ -41,7 +41,7 @@ class View:
     lists: Lists
     message: str = ""
     # Shown in red: why tasks.md can't be read (commands are refused until it's fixed), or why a
-    # line couldn't be sent to an agent
+    # line couldn't be sent to the agent
     problem: str = ""
     accepted: bool = False  # the command ran, so the text box can be cleared
 
@@ -63,7 +63,8 @@ class Controller:
         self.words = words
         self.now = now
         self.agents = agents
-        self.trouble: dict[str, str] = {}  # what's wrong with each agent, "" if nothing, this open
+        self.agent_checked = False  # this open
+        self.agent_trouble = ""  # what's wrong with the agent, if it's been checked
         self.lists = Lists()
         self.stamp = NO_FILE
         self.problem = ""
@@ -74,10 +75,10 @@ class Controller:
 
     def open(self) -> View:
         """Read tasks.md, events.log and the inbox again: any may have changed since the window
-        was last shown. Whether the agents are running is checked again too, when next needed."""
+        was last shown. Whether the agent is running is checked again too, when next needed."""
         self.read_inbox()
         self.log = self.store.history()
-        self.trouble = {}
+        self.agent_checked = False
         match self.store.load():
             case Snapshot(lists=lists, stamp=stamp):
                 self.lists, self.stamp, self.problem = lists, stamp, ""
@@ -91,8 +92,8 @@ class Controller:
 
     def run(self, text: str) -> View:
         match parse_command(text, self.words):
-            case Ask(agent=agent, text=asked):
-                return self._ask(agent, asked)
+            case Ask(text=asked):
+                return self._ask(asked)
             case _ if not text.strip():
                 if self.inbox:
                     self._clear_top()
@@ -100,18 +101,18 @@ class Controller:
             case command:
                 return self._apply(text, command)
 
-    def _ask(self, agent: str, text: str) -> View:
+    def _ask(self, text: str) -> View:
         """Typed into the agent's pane. Only spaces send nothing, but clear the line like a sent
         one. If it can't be sent, the line stays, to send again."""
         if not text:
             return View(self.lists, problem=self.problem, accepted=True)
-        why = self.agents.send(agent, text)
-        self.trouble[agent] = why
+        why = self.agents.send(AGENT, text)
+        self.agent_checked, self.agent_trouble = True, why
         if why:
             return View(self.lists, problem=why)
-        if self.inbox and self.inbox[0].sender == agent:  # answered, so read
+        if self.inbox and self.inbox[0].sender == AGENT:  # answered, so read
             self._clear_top()
-        return View(self.lists, f"sent to {agent}", self.problem, accepted=True)
+        return View(self.lists, f"sent to {AGENT}", self.problem, accepted=True)
 
     def _clear_top(self) -> None:
         self.store.clear(self.inbox[0])
@@ -138,19 +139,19 @@ class Controller:
                 return View(lists, message, accepted=True)
 
     def preview(self, text: str) -> Preview:
-        """What the line being typed will do, worked out on each key press. For an agent, the note
+        """What the line being typed will do, worked out on each key press. For the agent, the note
         names it, or says what's wrong; herdr is only asked once per open."""
         shown = preview(text, self.words, self.lists, self.now())
-        if shown.agent:
-            why = self._trouble(shown.agent)
-            shown = replace(shown, note=why or shown.agent, trouble=bool(why))
+        if shown.to_agent:
+            why = self._trouble()
+            shown = replace(shown, note=why or shown.note, trouble=bool(why))
         self.previewed = (text, shown)
         return shown
 
-    def _trouble(self, agent: str) -> str:
-        if agent not in self.trouble:
-            self.trouble[agent] = self.agents.check(agent)
-        return self.trouble[agent]
+    def _trouble(self) -> str:
+        if not self.agent_checked:
+            self.agent_checked, self.agent_trouble = True, self.agents.check(AGENT)
+        return self.agent_trouble
 
     def _moved_on(self, text: str, now: datetime) -> bool:
         """Whether what was shown for this line has changed with the clock alone: at 08:59, `9`

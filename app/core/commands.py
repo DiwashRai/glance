@@ -13,6 +13,7 @@ from datetime import datetime
 
 from app.core import blocks, steps
 from app.core.model import (
+    AGENT,
     FOCUS_SLOTS,
     STAR,
     Block,
@@ -123,10 +124,8 @@ class Typed:
 
 @dataclass(frozen=True)
 class Ask:
-    """A line for an agent: one space first is for the first of `CommandWords.agents`
-    (assistant), two or more for the second (chief)."""
+    """A line for the agent: any number of spaces first."""
 
-    agent: str
     text: str
 
 
@@ -154,22 +153,20 @@ class Preview:
 
     marks: tuple[tuple[int, int], ...] = ()
     note: str = ""
-    agent: str = ""  # who a line for an agent goes to
+    to_agent: bool = False  # the line goes to the agent
     trouble: bool = False  # the note says something's wrong outside glance: shown in red
     plan: Plan | NoPlan = NoPlan()  # as it would be: not shown, but Enter checks it's the same
 
 
 def parse_command(text: str, words: CommandWords) -> Command | Ask:
     """A command word first decides, case-insensitively, and the rest is the argument. With no
-    command word, it's `Typed`; with spaces first, it's for an agent (`Ask`).
+    command word, it's `Typed`; with spaces first, it's for the agent (`Ask`).
 
     Any run of whitespace in the argument, line breaks included, becomes one space, so a title or
     note is always a single line and `tasks.md` can always be read back.
     """
-    spaces = len(text) - len(text.lstrip(" "))
-    if spaces:
-        agents = words.agents
-        return Ask(agents[min(spaces, len(agents)) - 1], text.strip())
+    if text.startswith(" "):
+        return Ask(text.strip())
     first, *rest = text.split(maxsplit=1) or [""]
     word = first.lower()
     argument = " ".join(rest[0].split()) if rest else ""
@@ -196,20 +193,14 @@ def parse_command(text: str, words: CommandWords) -> Command | Ask:
     return Typed(text)
 
 
-def spaces_for(agent: str, words: CommandWords) -> int:
-    """How many spaces start a line for `agent`, the other way round from `parse_command`: 0 for
-    one that lines don't go to."""
-    return words.agents.index(agent) + 1 if agent in words.agents else 0
-
-
 def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Preview:
     """A command word is marked, so a task that starts with one (`wait for Sam`) is seen to be
     the command before it runs. A block's time, length and `!` are marked, with what it cuts, a
     task's star is marked, and `rm` says what it would remove, as that can't be undone."""
     word = tuple(found.span() for found in blocks.WORD.finditer(text))[:1]
     match parse_command(text, words):
-        case Ask(agent=agent):
-            return Preview(agent=agent, note=agent)
+        case Ask():
+            return Preview(to_agent=True, note=AGENT)
         case Typed():
             return _preview_block(lists, text, now)
         case Remove() as remove:

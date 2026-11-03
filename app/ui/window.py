@@ -204,7 +204,7 @@ class Window(QWidget):
 
     def show_inbox(self) -> None:
         """On each draw, and when the app sees a message come or go."""
-        self.inbox.show_inbox(self.controller.inbox, self.controller.words)
+        self.inbox.show_inbox(self.controller.inbox)
         if self.isVisible():
             self._fit(self.screen().availableGeometry())
 
