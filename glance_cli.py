@@ -111,10 +111,10 @@ def _name(text: str) -> str:
 
 
 class _NotSent:
-    """A line for chief (spaces first) isn't sent from here: agents have their own ways."""
+    """A line for the agent (spaces first) isn't sent from here: agents have their own ways."""
 
     def check(self) -> str:
-        return "lines for chief aren't sent from the command line"
+        return "lines for the agent aren't sent from the command line"
 
     def send(self, text: str) -> str:
         return self.check() if text else ""

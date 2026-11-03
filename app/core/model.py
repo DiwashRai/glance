@@ -262,7 +262,7 @@ class Problem:
     message: str
 
 
-CHIEF = "chief"  # the one agent a line can be sent to: its name in herdr, and on its messages
+AGENT = "chief"  # the one agent a line can be sent to: its name in herdr, and on its messages
 
 
 @dataclass(frozen=True)

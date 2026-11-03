@@ -4,7 +4,7 @@ words in, text out.
 
 from __future__ import annotations
 
-from app.core.model import CommandWords
+from app.core.model import AGENT, CommandWords
 
 # What each kind of line looks like, in the default command words. A test runs each one, so
 # they stay right.
@@ -51,7 +51,7 @@ waits on their taskbar until they've read it:
 
   glance --from <your name> '<a sentence or two>'
 
-300 characters at most: put more in a file and give its path. If you're chief, use that name:
+300 characters at most: put more in a file and give its path. If you're {agent}, use that name:
 the owner can then answer you from glance.
 
 - One glance command at a time, never in parallel: two at once can lose a change.
@@ -80,7 +80,7 @@ def skill(words: CommandWords) -> str:
     quoted = [(f"'{_renamed(line, renamed).replace("'", "''")}'", does) for line, does in EXAMPLES]
     width = max(len(line) for line, _ in quoted)
     examples = (f"  glance {line:<{width}}  {does}" for line, does in quoted)
-    return SKILL.format(examples="\n".join(examples))
+    return SKILL.format(examples="\n".join(examples), agent=AGENT)
 
 
 def _renamed(line: str, renamed: dict[str, str]) -> str:

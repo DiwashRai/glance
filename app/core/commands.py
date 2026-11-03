@@ -13,7 +13,7 @@ from datetime import datetime
 
 from app.core import blocks, steps
 from app.core.model import (
-    CHIEF,
+    AGENT,
     FOCUS_SLOTS,
     STAR,
     Block,
@@ -124,7 +124,7 @@ class Typed:
 
 @dataclass(frozen=True)
 class Ask:
-    """A line for chief: any number of spaces first."""
+    """A line for the agent: any number of spaces first."""
 
     text: str
 
@@ -153,14 +153,14 @@ class Preview:
 
     marks: tuple[tuple[int, int], ...] = ()
     note: str = ""
-    to_chief: bool = False  # the line goes to chief
+    to_agent: bool = False  # the line goes to the agent
     trouble: bool = False  # the note says something's wrong outside glance: shown in red
     plan: Plan | NoPlan = NoPlan()  # as it would be: not shown, but Enter checks it's the same
 
 
 def parse_command(text: str, words: CommandWords) -> Command | Ask:
     """A command word first decides, case-insensitively, and the rest is the argument. With no
-    command word, it's `Typed`; with spaces first, it's for chief (`Ask`).
+    command word, it's `Typed`; with spaces first, it's for the agent (`Ask`).
 
     Any run of whitespace in the argument, line breaks included, becomes one space, so a title or
     note is always a single line and `tasks.md` can always be read back.
@@ -200,7 +200,7 @@ def preview(text: str, words: CommandWords, lists: Lists, now: datetime) -> Prev
     word = tuple(found.span() for found in blocks.WORD.finditer(text))[:1]
     match parse_command(text, words):
         case Ask():
-            return Preview(to_chief=True, note=CHIEF)
+            return Preview(to_agent=True, note=AGENT)
         case Typed():
             return _preview_block(lists, text, now)
         case Remove() as remove:

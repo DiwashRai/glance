@@ -55,7 +55,7 @@ IDLE_DAY = Lists(Idle(), (WAITING, LEFT))
 def run(lists: Lists, text: str) -> Applied | Rejected:
     match parse_command(text, WORDS):
         case Ask():
-            pytest.fail("for chief")
+            pytest.fail("for the agent")
         case command:
             return apply(lists, command, NOW)
 

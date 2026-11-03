@@ -7,8 +7,8 @@ saved. The window writes the history (`write_history()`) after drawing, so a fai
 write can't leave the window showing stale lists.
 
 Messages for me wait in `inbox`, oldest first, read again on each open and whenever the app sees
-the inbox change. The top one is cleared by Enter on an empty line or, if chief sent it, by
-answering chief. Oldest first, so one that comes in while I'm reading goes to the back, and what
+the inbox change. The top one is cleared by Enter on an empty line or, if the agent sent it, by
+answering it. Oldest first, so one that comes in while I'm reading goes to the back, and what
 Enter clears is always the one shown.
 """
 
@@ -30,7 +30,7 @@ from app.core.commands import (
     parse_command,
     preview,
 )
-from app.core.model import CHIEF, CommandWords, Event, Lists, Message
+from app.core.model import AGENT, CommandWords, Event, Lists, Message
 from app.store import NO_FILE, Snapshot, Store, Unreadable
 
 
@@ -41,13 +41,13 @@ class View:
     lists: Lists
     message: str = ""
     # Shown in red: why tasks.md can't be read (commands are refused until it's fixed), or why a
-    # line couldn't be sent to chief
+    # line couldn't be sent to the agent
     problem: str = ""
     accepted: bool = False  # the command ran, so the text box can be cleared
 
 
-class Chief(Protocol):
-    """Where a line for chief goes: herdr, in the app. Neither call raises: each returns "" when
+class Agent(Protocol):
+    """Where a line for the agent goes: herdr, in the app. Neither call raises: each returns "" when
     all is well, else why not."""
 
     def check(self) -> str: ...
@@ -57,14 +57,14 @@ class Chief(Protocol):
 
 class Controller:
     def __init__(
-        self, store: Store, words: CommandWords, now: Callable[[], datetime], chief: Chief
+        self, store: Store, words: CommandWords, now: Callable[[], datetime], agent: Agent
     ) -> None:
         self.store = store
         self.words = words
         self.now = now
-        self.chief = chief
-        self.chief_checked = False  # this open
-        self.chief_trouble = ""  # what's wrong with chief, if it's been checked
+        self.agent = agent
+        self.agent_checked = False  # this open
+        self.agent_trouble = ""  # what's wrong with the agent, if it's been checked
         self.lists = Lists()
         self.stamp = NO_FILE
         self.problem = ""
@@ -75,10 +75,10 @@ class Controller:
 
     def open(self) -> View:
         """Read tasks.md, events.log and the inbox again: any may have changed since the window
-        was last shown. Whether chief is running is checked again too, when next needed."""
+        was last shown. Whether the agent is running is checked again too, when next needed."""
         self.read_inbox()
         self.log = self.store.history()
-        self.chief_checked = False
+        self.agent_checked = False
         match self.store.load():
             case Snapshot(lists=lists, stamp=stamp):
                 self.lists, self.stamp, self.problem = lists, stamp, ""
@@ -102,17 +102,17 @@ class Controller:
                 return self._apply(text, command)
 
     def _ask(self, text: str) -> View:
-        """Typed into chief's pane. Only spaces send nothing, but clear the line like a sent one.
-        If it can't be sent, the line stays, to send again."""
+        """Typed into the agent's pane. Only spaces send nothing, but clear the line like a sent
+        one. If it can't be sent, the line stays, to send again."""
         if not text:
             return View(self.lists, problem=self.problem, accepted=True)
-        why = self.chief.send(text)
-        self.chief_checked, self.chief_trouble = True, why
+        why = self.agent.send(text)
+        self.agent_checked, self.agent_trouble = True, why
         if why:
             return View(self.lists, problem=why)
-        if self.inbox and self.inbox[0].sender == CHIEF:  # answered, so read
+        if self.inbox and self.inbox[0].sender == AGENT:  # answered, so read
             self._clear_top()
-        return View(self.lists, f"sent to {CHIEF}", self.problem, accepted=True)
+        return View(self.lists, f"sent to {AGENT}", self.problem, accepted=True)
 
     def _clear_top(self) -> None:
         self.store.clear(self.inbox[0])
@@ -139,19 +139,19 @@ class Controller:
                 return View(lists, message, accepted=True)
 
     def preview(self, text: str) -> Preview:
-        """What the line being typed will do, worked out on each key press. For chief, the note
+        """What the line being typed will do, worked out on each key press. For the agent, the note
         names it, or says what's wrong; herdr is only asked once per open."""
         shown = preview(text, self.words, self.lists, self.now())
-        if shown.to_chief:
+        if shown.to_agent:
             why = self._trouble()
             shown = replace(shown, note=why or shown.note, trouble=bool(why))
         self.previewed = (text, shown)
         return shown
 
     def _trouble(self) -> str:
-        if not self.chief_checked:
-            self.chief_checked, self.chief_trouble = True, self.chief.check()
-        return self.chief_trouble
+        if not self.agent_checked:
+            self.agent_checked, self.agent_trouble = True, self.agent.check()
+        return self.agent_trouble
 
     def _moved_on(self, text: str, now: datetime) -> bool:
         """Whether what was shown for this line has changed with the clock alone: at 08:59, `9`
